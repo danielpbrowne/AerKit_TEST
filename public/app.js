@@ -938,12 +938,9 @@ function renderFlightInformation() {
   content.innerHTML = heading('', sections.flightInfo.title, sections.flightInfo.desc)
     + `<form class="flight-form" id="flight-information-form" autocomplete="off">
       <div class="flight-form-grid">
-        <section class="flight-panel route-panel"><div class="flight-panel-head"><h3>Destination &amp; Flight</h3></div>
+        <section class="flight-panel route-panel"><div class="flight-panel-head"><h3>Destination</h3></div>
           <div class="flight-fields route-fields">
             <label class="flight-field"><span>Destination</span><select name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
-            <label class="flight-field"><span>Flight number</span><select name="flightNumber" disabled><option value="">Select a destination first</option></select></label>
-            <div class="flight-field flight-number-manual-toggle"><span>Flight not listed?</span><label class="flight-number-checkbox"><input name="manualFlightNumberEnabled" type="checkbox" value="yes"><span>Enter an ad-hoc flight number</span></label></div>
-            <label class="flight-field ad-hoc-flight-field" id="ad-hoc-flight-number-wrap" hidden><span>Ad-hoc flight number</span><input name="adHocFlightNumber" type="text" maxlength="20" autocapitalize="characters" placeholder="e.g. EI999"></label>
             <label class="flight-field origin-airport-field" id="origin-airport-wrap" hidden><span>Origin airport</span><select name="originAirport" id="origin-airport"><option value="">Select origin airport</option>${originOptions}</select></label>
           </div>
         </section>
@@ -979,7 +976,7 @@ function renderFlightInformation() {
       <dialog class="flight-snapshot-dialog" id="flight-snapshot" aria-labelledby="flight-snapshot-title">
         <div class="flight-snapshot-shell">
           <header class="flight-snapshot-header"><div><span class="card-tag">AERKIT · FLIGHT INFORMATION</span><h2 id="flight-snapshot-title">Flight Snapshot</h2></div><button class="flight-snapshot-close" type="button" aria-label="Close Flight Snapshot">×</button></header>
-          <div class="flight-snapshot-route"><strong id="snapshot-flight-number">Flight number —</strong><span id="snapshot-route">Destination not selected</span><small id="snapshot-origin" hidden></small><small id="snapshot-weather">Destination weather not loaded</small></div>
+          <div class="flight-snapshot-route"><strong id="snapshot-route">Destination not selected</strong><small id="snapshot-origin" hidden></small><small id="snapshot-weather">Destination weather not loaded</small></div>
           <section class="flight-snapshot-section"><h3>Passenger Figures</h3><div class="flight-snapshot-passengers"><div><span>Business</span><strong id="snapshot-business">0</strong></div><div><span>Premium Economy</span><strong id="snapshot-premium">0</strong></div><div><span>Economy</span><strong id="snapshot-economy">0</strong></div><div><span>Infants</span><strong id="snapshot-infants">0</strong></div><div><span>PRMs</span><strong id="snapshot-prms">0</strong></div><div class="snapshot-total"><span>Total passengers</span><strong id="snapshot-total">0</strong></div></div></section>
           <section class="flight-snapshot-section"><h3>Flight Timings</h3><div class="flight-snapshot-timings"><div class="snapshot-pushback"><span>Pushback</span><strong id="snapshot-pushback">Not entered</strong></div><div class="snapshot-taxi-flight"><div><span>Taxi</span><strong id="snapshot-taxi">Not entered</strong></div><div><span>Flight duration</span><strong id="snapshot-duration">Not entered</strong></div></div><div class="snapshot-arrival"><span>Estimated arrival · Dublin</span><strong id="snapshot-arrival-dublin">Not calculated</strong></div><div class="snapshot-arrival"><span id="snapshot-destination-label">Estimated arrival · destination</span><strong id="snapshot-arrival-destination">Not calculated</strong></div></div></section>
           <section class="flight-snapshot-section snapshot-notes-section"><h3>Flight Notes</h3><p id="snapshot-notes">No notes entered</p></section>
@@ -1083,31 +1080,6 @@ function renderFlightInformation() {
   };
   form.addEventListener('input', handleFlightInput);
   form.addEventListener('change', handleFlightInput);
-  const flightNumberSelect = form.elements.flightNumber;
-  const adHocFlightWrap = content.querySelector('#ad-hoc-flight-number-wrap');
-  const refreshFlightsForDestination = (destinationCode, keepFlight = '') => {
-    const matchingFlights = data.flightSchedule
-      .map((flight, index) => ({ flight, index }))
-      .filter(({ flight }) => flight.destinationCode === destinationCode);
-    flightNumberSelect.innerHTML = `<option value="">${destinationCode ? 'Select flight number' : 'Select a destination first'}</option>${matchingFlights.map(({ flight, index }) => `<option value="${index}">${escapeHtml(flight.flightNumber)}</option>`).join('')}`;
-    flightNumberSelect.disabled = !destinationCode || form.elements.manualFlightNumberEnabled.checked;
-    if (keepFlight && matchingFlights.some(({ index }) => String(index) === keepFlight)) flightNumberSelect.value = keepFlight;
-  };
-  form.elements.destination.addEventListener('change', () => {
-    refreshFlightsForDestination(form.elements.destination.value);
-  });
-  form.elements.manualFlightNumberEnabled.addEventListener('change', () => {
-    const manual = form.elements.manualFlightNumberEnabled.checked;
-    adHocFlightWrap.hidden = !manual;
-    flightNumberSelect.disabled = manual || !form.elements.destination.value;
-    if (manual) flightNumberSelect.value = '';
-    else form.elements.adHocFlightNumber.value = '';
-  });
-  form.addEventListener('reset', () => setTimeout(() => {
-    adHocFlightWrap.hidden = !form.elements.manualFlightNumberEnabled.checked;
-    refreshFlightsForDestination(form.elements.destination.value);
-    updateFlightSummary();
-  }, 0));
   content.querySelector('#use-current-pushback-time').addEventListener('click', () => {
     const selectedZone = form.elements.destination.value === 'DUB'
       ? destinationTimeZones[form.elements.originAirport.value]
@@ -1133,8 +1105,6 @@ function renderFlightInformation() {
   const updateFlightSnapshot = () => {
     const values = Object.fromEntries(new FormData(form).entries());
     const destination = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].find(item => item.code === values.destination);
-    const flight = values.flightNumber === '' ? null : data.flightSchedule[Number(values.flightNumber)];
-    snapshotValue('#snapshot-flight-number', values.adHocFlightNumber?.trim().toUpperCase() || flight?.flightNumber || 'Flight number not selected');
     snapshotValue('#snapshot-route', destination ? `${destination.name} (${destination.code})` : 'Destination not selected');
     const origin = data.destinations.find(item => item.code === values.originAirport);
     const originLine = content.querySelector('#snapshot-origin');
