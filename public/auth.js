@@ -25,6 +25,29 @@
     }
   };
 
+  function isLocalPreviewOrigin() {
+    return window.location.protocol === 'file:'
+      || ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  }
+
+  function startLocalPreview() {
+    window.AERKIT_PREVIEW_MODE = true;
+    window.CSM_DATA = window.AERKIT_PREVIEW_DATA;
+    gate.hidden = true;
+    shell.hidden = false;
+    const banner = document.querySelector('#preview-banner');
+    banner.hidden = false;
+    document.querySelector('#auth-signout').hidden = true;
+    const script = document.createElement('script');
+    script.src = './app.js?v=flight-snapshot-20261121-r4';
+    script.onerror = () => {
+      shell.hidden = true;
+      gate.hidden = false;
+      setStatus('Local preview could not load app.js.', true);
+    };
+    document.body.append(script);
+  }
+
   async function clearLegacyOfflineCopies() {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
@@ -76,6 +99,10 @@
   }
 
   async function start() {
+    if (isLocalPreviewOrigin()) {
+      startLocalPreview();
+      return;
+    }
     await clearLegacyOfflineCopies();
     if (!config.url || !config.publishableKey) {
       setStatus('Add the Supabase publishable key in supabase-config.js before using this test app.', true);
