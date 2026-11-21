@@ -198,6 +198,10 @@ function initFeedbackPage() {
   form.addEventListener('reset', () => setTimeout(updateFields));
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (window.AERKIT_PREVIEW_MODE) {
+      status.textContent = 'Preview mode: feedback was not submitted.';
+      return;
+    }
     const selected = category.value;
     const destinationName = !destinationWrap.hidden && destination.value ? destination.options[destination.selectedIndex].textContent : '';
     const extra = form.querySelector('#feedback-context').value.trim();

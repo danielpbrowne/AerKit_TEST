@@ -17,6 +17,8 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 .auth-gate{min-height:100vh;display:grid;place-items:center;padding:28px;background:linear-gradient(140deg,#142b3b,#2d4a59 65%,#52665e)}
+.preview-banner{display:flex;justify-content:center;align-items:center;gap:12px;padding:9px 16px;background:#fff2c7;color:#553c00;font-size:13px;text-align:center}
+.preview-banner strong{letter-spacing:.08em;font-size:11px}
 .auth-card{width:min(100%,440px);padding:34px;background:#f7f7f2;border-radius:10px;box-shadow:0 20px 65px #07151d55;color:#192f3e}
 .auth-logo{display:block;width:76px;height:76px;object-fit:contain;margin:0 auto 18px;border-radius:10px}
 .auth-eyebrow{text-align:center;color:#8b753c;font:700 11px ui-monospace,SFMono-Regular,monospace;letter-spacing:.16em}
