@@ -1005,6 +1005,15 @@ function renderFlightInformation() {
     localStorage.removeItem('csm-flight-information-v1');
   } catch {}
 
+  const formatZonedDateTime = (date, timeZone) => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+      hourCycle: 'h23', timeZoneName: 'short'
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+    return `${values.hour}:${values.minute} ${values.timeZoneName} | ${values.day}-${values.month}`;
+  };
+
   const updateFlightSummary = () => {
     const total = ['business', 'premiumEconomy', 'economy', 'infants'].reduce((sum, name) => sum + Math.max(0, Number(form.elements[name].value) || 0), 0);
     content.querySelector('#passenger-total').textContent = total.toLocaleString('en-IE');
@@ -1067,14 +1076,10 @@ function renderFlightInformation() {
     }
 
     const arrival = new Date(pushback.getTime() + (flightHours * 60 + flightMinutes + taxiMinutes) * 60_000);
-    const formatArrival = timeZone => new Intl.DateTimeFormat('en-IE', {
-      timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-      hourCycle: 'h23', timeZoneName: 'short'
-    }).format(arrival);
-    estimatedDublin.textContent = formatArrival('Europe/Dublin');
+    estimatedDublin.textContent = formatZonedDateTime(arrival, 'Europe/Dublin');
     const destinationTimeZone = destinationTimeZones[destination?.code];
     estimatedDestination.textContent = destination
-      ? (destinationTimeZone ? formatArrival(destinationTimeZone) : 'Time zone unavailable')
+      ? (destinationTimeZone ? formatZonedDateTime(arrival, destinationTimeZone) : 'Time zone unavailable')
       : 'Select destination';
   };
 
@@ -1120,8 +1125,11 @@ function renderFlightInformation() {
     snapshotValue('#snapshot-infants', values.infants || '0');
     snapshotValue('#snapshot-prms', values.prms || '0');
     snapshotValue('#snapshot-total', content.querySelector('#passenger-total').textContent);
-    const zone = content.querySelector('#pushback-time-zone').textContent.replace(/^Time zone used: /, '');
-    snapshotValue('#snapshot-pushback', values.pushback ? `${values.pushback.replace('T', ' ')} · ${zone}` : 'Not entered');
+    const pushbackZone = values.destination === 'DUB' ? destinationTimeZones[values.originAirport] : 'Europe/Dublin';
+    const pushbackDate = values.pushback && pushbackZone ? wallTimeToDate(values.pushback, pushbackZone) : null;
+    snapshotValue('#snapshot-pushback', pushbackDate && Number.isFinite(pushbackDate.getTime())
+      ? formatZonedDateTime(pushbackDate, pushbackZone)
+      : 'Not entered');
     snapshotValue('#snapshot-taxi', values.taxiMinutes ? `${values.taxiMinutes} minutes` : 'Not entered');
     snapshotValue('#snapshot-duration', values.flightHours || values.flightMinutes ? `${values.flightHours || '0'}h ${values.flightMinutes || '0'}m` : 'Not entered');
     snapshotValue('#snapshot-arrival-dublin', content.querySelector('#estimated-arrival-dublin').textContent);
