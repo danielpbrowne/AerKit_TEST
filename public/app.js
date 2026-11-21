@@ -103,6 +103,7 @@ const destinationTimeZones = {
 };
 
 const destinationAirportCoordinates = {
+  DUB: [53.4213, -6.2701],
   BOS: [42.3656, -71.0096], CUN: [21.0365, -86.8771], ORD: [41.9742, -87.9073], CLE: [41.4117, -81.8498],
   BDL: [41.9389, -72.6832], IND: [39.7173, -86.2944], LAX: [33.9416, -118.4085], MIA: [25.7959, -80.287],
   BNA: [36.1263, -86.6774], JFK: [40.6413, -73.7781], EWR: [40.6895, -74.1745], MCO: [28.4312, -81.3081],
@@ -845,21 +846,20 @@ function weatherDescription(code) {
 
 async function updateDestinationWeather(destination) {
   const output = document.querySelector('#destination-weather');
-  const coordinates = destinationAirportCoordinates[destination.code];
-  if (!output || !coordinates) {
-    if (output) output.textContent = 'Unavailable';
-    return;
-  }
-  if (navigator.onLine === false) {
-    output.textContent = 'Weather unavailable offline';
-    return;
-  }
-  const cached = destinationWeatherCache.get(destination.code);
-  if (cached && Date.now() - cached.time < 20 * 60 * 1000) {
-    output.innerHTML = cached.html;
-    return;
-  }
+  if (!output) return;
   output.textContent = 'Loading weather…';
+  const weather = await getDestinationWeather(destination);
+  if (document.querySelector('#destination-weather') !== output) return;
+  if (weather.html) output.innerHTML = weather.html;
+  else output.textContent = weather.text;
+}
+
+async function getDestinationWeather(destination) {
+  const coordinates = destinationAirportCoordinates[destination.code];
+  if (!coordinates) return { text: 'Weather unavailable for this destination' };
+  const cached = destinationWeatherCache.get(destination.code);
+  if (cached && Date.now() - cached.time < 20 * 60 * 1000) return cached;
+  if (navigator.onLine === false) return { text: 'Weather unavailable offline' };
   try {
     const [latitude, longitude] = coordinates;
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto`;
@@ -871,10 +871,11 @@ async function updateDestinationWeather(destination) {
     if (!Number.isFinite(temperature) || !Number.isFinite(code)) throw new Error('Weather data unavailable');
     const [icon, description] = weatherDescription(code);
     const html = `<span class="weather-icon" aria-hidden="true">${icon}</span> <span class="weather-temperature">${Math.round(temperature)}°C</span><span class="weather-description">${escapeHtml(description)}</span>`;
-    destinationWeatherCache.set(destination.code, { time: Date.now(), html });
-    if (document.querySelector('#destination-weather') === output) output.innerHTML = html;
+    const weather = { time: Date.now(), html, text: `${icon} ${Math.round(temperature)}°C · ${description}` };
+    destinationWeatherCache.set(destination.code, weather);
+    return weather;
   } catch {
-    if (document.querySelector('#destination-weather') === output) output.textContent = navigator.onLine === false ? 'Weather unavailable offline' : 'Weather unavailable';
+    return { text: navigator.onLine === false ? 'Weather unavailable offline' : 'Weather unavailable' };
   }
 }
 
@@ -934,14 +935,15 @@ function renderFlightInformation() {
     .map(destination => `<option value="${escapeHtml(destination.code)}">${escapeHtml(destination.name)} (${escapeHtml(destination.code)})</option>`).join('');
   const originOptions = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name))
     .map(origin => `<option value="${escapeHtml(origin.code)}">${escapeHtml(origin.name)} (${escapeHtml(origin.code)})</option>`).join('');
-  const flightOptions = data.flightSchedule.map((flight, index) => `<option value="${index}">${escapeHtml(flight.flightNumber)}</option>`).join('');
   content.innerHTML = heading('', sections.flightInfo.title, sections.flightInfo.desc)
     + `<form class="flight-form" id="flight-information-form" autocomplete="off">
       <div class="flight-form-grid">
         <section class="flight-panel route-panel"><div class="flight-panel-head"><h3>Destination &amp; Flight</h3></div>
           <div class="flight-fields route-fields">
             <label class="flight-field"><span>Destination</span><select name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
-            <label class="flight-field"><span>Flight number</span><select name="flightNumber"><option value="">Select flight number</option>${flightOptions}</select></label>
+            <label class="flight-field"><span>Flight number</span><select name="flightNumber" disabled><option value="">Select a destination first</option></select></label>
+            <div class="flight-field flight-number-manual-toggle"><span>Flight not listed?</span><label class="flight-number-checkbox"><input name="manualFlightNumberEnabled" type="checkbox" value="yes"><span>Enter an ad-hoc flight number</span></label></div>
+            <label class="flight-field ad-hoc-flight-field" id="ad-hoc-flight-number-wrap" hidden><span>Ad-hoc flight number</span><input name="adHocFlightNumber" type="text" maxlength="20" autocapitalize="characters" placeholder="e.g. EI999"></label>
             <label class="flight-field origin-airport-field" id="origin-airport-wrap" hidden><span>Origin airport</span><select name="originAirport" id="origin-airport"><option value="">Select origin airport</option>${originOptions}</select></label>
           </div>
         </section>
@@ -977,9 +979,9 @@ function renderFlightInformation() {
       <dialog class="flight-snapshot-dialog" id="flight-snapshot" aria-labelledby="flight-snapshot-title">
         <div class="flight-snapshot-shell">
           <header class="flight-snapshot-header"><div><span class="card-tag">AERKIT · FLIGHT INFORMATION</span><h2 id="flight-snapshot-title">Flight Snapshot</h2></div><button class="flight-snapshot-close" type="button" aria-label="Close Flight Snapshot">×</button></header>
-          <div class="flight-snapshot-route"><strong id="snapshot-flight-number">Flight number —</strong><span id="snapshot-route">Destination not selected</span><small id="snapshot-origin" hidden></small></div>
+          <div class="flight-snapshot-route"><strong id="snapshot-flight-number">Flight number —</strong><span id="snapshot-route">Destination not selected</span><small id="snapshot-origin" hidden></small><small id="snapshot-weather">Destination weather not loaded</small></div>
           <section class="flight-snapshot-section"><h3>Passenger Figures</h3><div class="flight-snapshot-passengers"><div><span>Business</span><strong id="snapshot-business">0</strong></div><div><span>Premium Economy</span><strong id="snapshot-premium">0</strong></div><div><span>Economy</span><strong id="snapshot-economy">0</strong></div><div><span>Infants</span><strong id="snapshot-infants">0</strong></div><div><span>PRMs</span><strong id="snapshot-prms">0</strong></div><div class="snapshot-total"><span>Total passengers</span><strong id="snapshot-total">0</strong></div></div></section>
-          <section class="flight-snapshot-section"><h3>Flight Timings</h3><div class="flight-snapshot-timings"><div><span>Pushback</span><strong id="snapshot-pushback">Not entered</strong></div><div><span>Taxi</span><strong id="snapshot-taxi">Not entered</strong></div><div><span>Flight time</span><strong id="snapshot-duration">Not entered</strong></div><div><span>Estimated arrival · Dublin</span><strong id="snapshot-arrival-dublin">Not calculated</strong></div><div class="snapshot-destination-arrival"><span id="snapshot-destination-label">Estimated arrival · destination</span><strong id="snapshot-arrival-destination">Not calculated</strong></div></div></section>
+          <section class="flight-snapshot-section"><h3>Flight Timings</h3><div class="flight-snapshot-timings"><div class="snapshot-pushback"><span>Pushback</span><strong id="snapshot-pushback">Not entered</strong></div><div class="snapshot-taxi-flight"><div><span>Taxi</span><strong id="snapshot-taxi">Not entered</strong></div><div><span>Flight duration</span><strong id="snapshot-duration">Not entered</strong></div></div><div class="snapshot-arrival"><span>Estimated arrival · Dublin</span><strong id="snapshot-arrival-dublin">Not calculated</strong></div><div class="snapshot-arrival"><span id="snapshot-destination-label">Estimated arrival · destination</span><strong id="snapshot-arrival-destination">Not calculated</strong></div></div></section>
           <section class="flight-snapshot-section snapshot-notes-section"><h3>Flight Notes</h3><p id="snapshot-notes">No notes entered</p></section>
         </div>
       </dialog>
@@ -1081,15 +1083,31 @@ function renderFlightInformation() {
   };
   form.addEventListener('input', handleFlightInput);
   form.addEventListener('change', handleFlightInput);
-  form.elements.flightNumber.addEventListener('change', () => {
-    const selectedFlight = form.elements.flightNumber.value === '' ? null : data.flightSchedule[Number(form.elements.flightNumber.value)];
-    form.elements.destination.value = selectedFlight?.destinationCode || '';
-    form.elements.destination.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  const flightNumberSelect = form.elements.flightNumber;
+  const adHocFlightWrap = content.querySelector('#ad-hoc-flight-number-wrap');
+  const refreshFlightsForDestination = (destinationCode, keepFlight = '') => {
+    const matchingFlights = data.flightSchedule
+      .map((flight, index) => ({ flight, index }))
+      .filter(({ flight }) => flight.destinationCode === destinationCode);
+    flightNumberSelect.innerHTML = `<option value="">${destinationCode ? 'Select flight number' : 'Select a destination first'}</option>${matchingFlights.map(({ flight, index }) => `<option value="${index}">${escapeHtml(flight.flightNumber)}</option>`).join('')}`;
+    flightNumberSelect.disabled = !destinationCode || form.elements.manualFlightNumberEnabled.checked;
+    if (keepFlight && matchingFlights.some(({ index }) => String(index) === keepFlight)) flightNumberSelect.value = keepFlight;
+  };
   form.elements.destination.addEventListener('change', () => {
-    const selectedFlight = form.elements.flightNumber.value === '' ? null : data.flightSchedule[Number(form.elements.flightNumber.value)];
-    if (selectedFlight && selectedFlight.destinationCode !== form.elements.destination.value) form.elements.flightNumber.value = '';
+    refreshFlightsForDestination(form.elements.destination.value);
   });
+  form.elements.manualFlightNumberEnabled.addEventListener('change', () => {
+    const manual = form.elements.manualFlightNumberEnabled.checked;
+    adHocFlightWrap.hidden = !manual;
+    flightNumberSelect.disabled = manual || !form.elements.destination.value;
+    if (manual) flightNumberSelect.value = '';
+    else form.elements.adHocFlightNumber.value = '';
+  });
+  form.addEventListener('reset', () => setTimeout(() => {
+    adHocFlightWrap.hidden = !form.elements.manualFlightNumberEnabled.checked;
+    refreshFlightsForDestination(form.elements.destination.value);
+    updateFlightSummary();
+  }, 0));
   content.querySelector('#use-current-pushback-time').addEventListener('click', () => {
     const selectedZone = form.elements.destination.value === 'DUB'
       ? destinationTimeZones[form.elements.originAirport.value]
@@ -1116,7 +1134,7 @@ function renderFlightInformation() {
     const values = Object.fromEntries(new FormData(form).entries());
     const destination = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].find(item => item.code === values.destination);
     const flight = values.flightNumber === '' ? null : data.flightSchedule[Number(values.flightNumber)];
-    snapshotValue('#snapshot-flight-number', flight?.flightNumber || 'Flight number not selected');
+    snapshotValue('#snapshot-flight-number', values.adHocFlightNumber?.trim().toUpperCase() || flight?.flightNumber || 'Flight number not selected');
     snapshotValue('#snapshot-route', destination ? `${destination.name} (${destination.code})` : 'Destination not selected');
     const origin = data.destinations.find(item => item.code === values.originAirport);
     const originLine = content.querySelector('#snapshot-origin');
@@ -1138,9 +1156,17 @@ function renderFlightInformation() {
     destinationLabel.textContent = destination ? `Estimated arrival · ${destination.name}` : 'Estimated arrival · destination';
     snapshotValue('#snapshot-notes', values.flightInformation?.trim() || 'No notes entered');
   };
-  content.querySelector('#flight-snapshot-button').addEventListener('click', () => {
+  content.querySelector('#flight-snapshot-button').addEventListener('click', async () => {
     updateFlightSnapshot();
     snapshot.showModal();
+    const destinationCode = form.elements.destination.value;
+    const destination = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].find(item => item.code === destinationCode);
+    const weatherOutput = content.querySelector('#snapshot-weather');
+    weatherOutput.textContent = destination ? 'Destination weather · Loading…' : 'Select a destination for weather';
+    const weather = destination ? await getDestinationWeather(destination) : null;
+    if (snapshot.open && form.elements.destination.value === destinationCode && weather) {
+      weatherOutput.textContent = `Weather · ${weather.text || 'Unavailable'} · Open-Meteo`;
+    }
     const snapshotShell = snapshot.querySelector('.flight-snapshot-shell');
     snapshotShell.style.zoom = '1';
     requestAnimationFrame(() => {

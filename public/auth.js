@@ -70,7 +70,7 @@
     appStarted = true;
     setStatus('');
     const script = document.createElement('script');
-    script.src = './app.js?v=flight-snapshot-20261121-r1';
+    script.src = './app.js?v=flight-snapshot-20261121-r3';
     script.onerror = () => setStatus('AerKit could not finish loading.', true);
     document.body.append(script);
   }
