@@ -804,6 +804,8 @@ function renderAircraft() {
 function renderFlightInformation() {
   const destinationOptions = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].sort((a, b) => a.name.localeCompare(b.name))
     .map(destination => `<option value="${escapeHtml(destination.code)}">${escapeHtml(destination.name)} (${escapeHtml(destination.code)})</option>`).join('');
+  const originOptions = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name))
+    .map(origin => `<option value="${escapeHtml(origin.code)}">${escapeHtml(origin.name)} (${escapeHtml(origin.code)})</option>`).join('');
   content.innerHTML = heading('', sections.flightInfo.title, sections.flightInfo.desc)
     + `<form class="flight-form" id="flight-information-form" autocomplete="off">
       <div class="flight-form-grid">
@@ -822,7 +824,8 @@ function renderFlightInformation() {
         <section class="flight-panel"><div class="flight-panel-head"><h3>Destination &amp; Timings</h3></div>
           <div class="flight-fields">
             <label class="flight-field"><span>Destination</span><select name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
-            <div class="flight-field pushback-time-field"><label for="pushback-time">Push Back Time (Dublin local)</label><input id="pushback-time" name="pushback" type="datetime-local"><button class="current-time-button" type="button" id="use-current-pushback-time">Use current time</button></div>
+            <label class="flight-field" id="origin-airport-wrap" hidden><span>Origin airport</span><select name="originAirport" id="origin-airport"><option value="">Select origin airport</option>${originOptions}</select></label>
+            <div class="flight-field pushback-time-field"><label for="pushback-time">Pushback time</label><input id="pushback-time" name="pushback" type="datetime-local" aria-describedby="pushback-time-zone"><small id="pushback-time-zone" role="status" aria-live="polite">Time zone used: Dublin (Europe/Dublin)</small><button class="current-time-button" type="button" id="use-current-pushback-time">Use current time</button></div>
             <div class="flight-duration-pair">
               <label class="flight-field taxi-minutes-field"><span>Taxi (mins)</span><input name="taxiMinutes" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></label>
               <fieldset class="flight-field duration-field"><legend>Flight Time</legend><div><label><input name="flightHours" type="number" min="0" max="30" inputmode="numeric" placeholder="0"><small>hours</small></label><b>:</b><label><input name="flightMinutes" type="number" min="0" max="59" inputmode="numeric" placeholder="00"><small>minutes</small></label></div></fieldset>
@@ -868,8 +871,24 @@ function renderFlightInformation() {
     const hasTaxiTime = form.elements.taxiMinutes.value !== '';
     const estimatedDublin = content.querySelector('#estimated-arrival-dublin');
     const estimatedDestination = content.querySelector('#estimated-arrival-destination');
+    const originWrap = content.querySelector('#origin-airport-wrap');
+    const originAirport = form.elements.originAirport;
+    const pushbackTimeZone = content.querySelector('#pushback-time-zone');
+    const isDublinDestination = form.elements.destination.value === 'DUB';
+    originWrap.hidden = !isDublinDestination;
+    originAirport.required = isDublinDestination;
+    if (!isDublinDestination) originAirport.value = '';
     const destination = data.destinations.find(item => item.code === form.elements.destination.value)
       || (form.elements.destination.value === 'DUB' ? { name: 'Dublin', code: 'DUB' } : null);
+    const origin = data.destinations.find(item => item.code === originAirport.value);
+    const pushbackZone = isDublinDestination ? destinationTimeZones[originAirport.value] : 'Europe/Dublin';
+    const pushbackZoneLabel = isDublinDestination
+      ? (origin && pushbackZone ? `${origin.name} (${pushbackZone})` : '')
+      : `Dublin (${pushbackZone})`;
+    pushbackTimeZone.textContent = pushbackZoneLabel
+      ? `Time zone used: ${pushbackZoneLabel}`
+      : 'Select an origin airport to set the pushback time zone.';
+    content.querySelector('#use-current-pushback-time').disabled = !pushbackZone;
     content.querySelector('#destination-arrival-label').textContent = destination
       ? `ESTIMATED ARRIVAL · ${destination.name.toUpperCase()} LOCAL TIME`
       : 'DESTINATION LOCAL TIME';
@@ -880,13 +899,19 @@ function renderFlightInformation() {
       return;
     }
 
+    if (!pushbackZone) {
+      estimatedDublin.textContent = 'Select an origin airport to set the pushback time zone';
+      estimatedDestination.textContent = 'Select an origin airport to set the pushback time zone';
+      return;
+    }
+
     if (!pushbackValue || !hasFlightTime || !hasTaxiTime) {
       estimatedDublin.textContent = 'Enter the required times';
       estimatedDestination.textContent = destination ? 'Enter timings to calculate' : 'Select destination';
       return;
     }
 
-    const pushback = dublinWallTimeToDate(pushbackValue);
+    const pushback = wallTimeToDate(pushbackValue, pushbackZone);
     const invalidDuration = flightHours < 0 || flightHours > 30 || flightMinutes < 0 || flightMinutes > 59
       || taxiMinutes < 1 || !Number.isInteger(taxiMinutes);
     if (!Number.isFinite(pushback.getTime()) || invalidDuration) {
@@ -907,14 +932,20 @@ function renderFlightInformation() {
       : 'Select destination';
   };
 
-  form.addEventListener('input', () => {
+  const handleFlightInput = () => {
     capPassengerCounts();
     updateFlightSummary();
-  });
+  };
+  form.addEventListener('input', handleFlightInput);
+  form.addEventListener('change', handleFlightInput);
   content.querySelector('#use-current-pushback-time').addEventListener('click', () => {
+    const selectedZone = form.elements.destination.value === 'DUB'
+      ? destinationTimeZones[form.elements.originAirport.value]
+      : 'Europe/Dublin';
+    if (!selectedZone) return;
     const now = new Date();
     const pad = value => String(value).padStart(2, '0');
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: selectedZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
     const part = type => parts.find(item => item.type === type)?.value;
     form.elements.pushback.value = `${part('year')}-${part('month')}-${part('day')}T${pad(Number(part('hour')))}:${pad(Number(part('minute')))}`;
     form.elements.pushback.dispatchEvent(new Event('input', { bubbles: true }));
@@ -932,9 +963,10 @@ function renderFlightInformation() {
     const destination = data.destinations.find(item => item.code === values.destination)?.name || values.destination || 'Not selected';
     const summary = [
       'AerKit Flight Summary', `Destination: ${destination}`,
+      ...(values.originAirport ? [`Origin: ${data.destinations.find(item => item.code === values.originAirport)?.name || values.originAirport}`] : []),
       `Passengers (including infants): ${content.querySelector('#passenger-total').textContent}`,
       `Infants: ${values.infants || '0'} · PRMs (separate): ${values.prms || '0'}`,
-      `Push back: ${values.pushback || 'Not entered'}`,
+      `Pushback: ${values.pushback || 'Not entered'} · ${content.querySelector('#pushback-time-zone').textContent.replace(/^Time zone used: /, '')}`,
       `Taxi: ${values.taxiMinutes ? `${values.taxiMinutes} minutes` : 'Not entered'}`,
       `Flight time: ${values.flightHours || '0'}h ${values.flightMinutes || '0'}m`,
       `Estimated arrival Dublin: ${content.querySelector('#estimated-arrival-dublin').textContent}`,
@@ -950,13 +982,13 @@ function renderFlightInformation() {
   });
 }
 
-function dublinWallTimeToDate(value) {
+function wallTimeToDate(value, timeZone) {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
   if (!match) return new Date(NaN);
   const [, year, month, day, hour, minute] = match.map(Number);
   const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute);
   const offsetAt = instant => {
-    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Dublin', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' }).formatToParts(new Date(instant));
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' }).formatToParts(new Date(instant));
     const fields = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
     return Date.UTC(fields.year, fields.month - 1, fields.day, fields.hour, fields.minute, fields.second) - Math.floor(instant / 1000) * 1000;
   };
