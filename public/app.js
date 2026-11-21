@@ -1308,27 +1308,3 @@ installButton.addEventListener('click', async () => {
   installButton.hidden = true;
 });
 
-if ('serviceWorker' in navigator) {
-  const syncStatus = document.querySelector('#sync-status');
-  navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data?.type !== 'CACHE_STATUS') return;
-    if (!event.data.ready) {
-      syncStatus.textContent = 'Offline references unavailable';
-      return;
-    }
-    const synced = event.data.syncedAt ? new Date(event.data.syncedAt) : null;
-    const label = synced && Number.isFinite(synced.getTime())
-      ? new Intl.DateTimeFormat('en-IE', { dateStyle: 'medium', timeStyle: 'short' }).format(synced)
-      : 'time unknown';
-    syncStatus.textContent = `Offline references ready · Last sync ${label}`;
-  });
-  window.addEventListener('load', async () => {
-    try {
-      await navigator.serviceWorker.register('./service-worker.js');
-      const registration = await navigator.serviceWorker.ready;
-      (navigator.serviceWorker.controller || registration.active)?.postMessage('GET_CACHE_STATUS');
-    } catch {
-      syncStatus.textContent = 'Offline references not available';
-    }
-  });
-}
