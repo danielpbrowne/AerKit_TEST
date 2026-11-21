@@ -934,9 +934,17 @@ function renderFlightInformation() {
     .map(destination => `<option value="${escapeHtml(destination.code)}">${escapeHtml(destination.name)} (${escapeHtml(destination.code)})</option>`).join('');
   const originOptions = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name))
     .map(origin => `<option value="${escapeHtml(origin.code)}">${escapeHtml(origin.name)} (${escapeHtml(origin.code)})</option>`).join('');
+  const flightOptions = data.flightSchedule.map((flight, index) => `<option value="${index}">${escapeHtml(flight.flightNumber)}</option>`).join('');
   content.innerHTML = heading('', sections.flightInfo.title, sections.flightInfo.desc)
     + `<form class="flight-form" id="flight-information-form" autocomplete="off">
       <div class="flight-form-grid">
+        <section class="flight-panel route-panel"><div class="flight-panel-head"><h3>Destination &amp; Flight</h3></div>
+          <div class="flight-fields route-fields">
+            <label class="flight-field"><span>Destination</span><select name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
+            <label class="flight-field"><span>Flight number</span><select name="flightNumber"><option value="">Select flight number</option>${flightOptions}</select></label>
+            <label class="flight-field origin-airport-field" id="origin-airport-wrap" hidden><span>Origin airport</span><select name="originAirport" id="origin-airport"><option value="">Select origin airport</option>${originOptions}</select></label>
+          </div>
+        </section>
         <section class="flight-panel"><div class="flight-panel-head"><h3>Passenger Figures</h3></div>
           <div class="passenger-counts">
             <label class="flight-field"><span>Business Class</span><input name="business" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="0"></label>
@@ -949,10 +957,8 @@ function renderFlightInformation() {
           </div>
           <div class="passenger-total"><span>TOTAL PAX · INCLUDES INFANTS</span><strong id="passenger-total">0</strong></div>
         </section>
-        <section class="flight-panel"><div class="flight-panel-head"><h3>Destination &amp; Timings</h3></div>
+        <section class="flight-panel"><div class="flight-panel-head"><h3>Flight Timings</h3></div>
           <div class="flight-fields">
-            <label class="flight-field"><span>Destination</span><select name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
-            <label class="flight-field" id="origin-airport-wrap" hidden><span>Origin airport</span><select name="originAirport" id="origin-airport"><option value="">Select origin airport</option>${originOptions}</select></label>
             <div class="flight-field pushback-time-field"><label for="pushback-time">Pushback time</label><input id="pushback-time" name="pushback" type="datetime-local" aria-describedby="pushback-time-zone"><small id="pushback-time-zone" role="status" aria-live="polite">Time zone used: Dublin (Europe/Dublin)</small><button class="current-time-button" type="button" id="use-current-pushback-time">Use current time</button></div>
             <div class="flight-duration-pair">
               <label class="flight-field taxi-minutes-field"><span>Taxi (mins)</span><input name="taxiMinutes" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></label>
@@ -967,7 +973,16 @@ function renderFlightInformation() {
           </div>
         </section>
       </div>
-      <div class="flight-form-footer"><small id="flight-save-status" role="status">Entries stay in this page only and are cleared when you leave. PRMs are recorded separately and are not included in passenger total.</small><div class="flight-footer-actions"><button class="clear-flight-button" type="button" id="copy-flight-information">Copy Flight Summary</button><button class="clear-flight-button" type="button" id="clear-flight-information">Clear Flight Information</button></div></div>
+      <div class="flight-form-footer"><small id="flight-save-status" role="status">Entries stay in this page only and are cleared when you leave. PRMs are recorded separately and are not included in passenger total.</small><div class="flight-footer-actions"><button class="clear-flight-button" type="button" id="flight-snapshot-button">Flight Snapshot</button><button class="clear-flight-button" type="button" id="clear-flight-information">Clear Flight Information</button></div></div>
+      <dialog class="flight-snapshot-dialog" id="flight-snapshot" aria-labelledby="flight-snapshot-title">
+        <div class="flight-snapshot-shell">
+          <header class="flight-snapshot-header"><div><span class="card-tag">AERKIT · FLIGHT INFORMATION</span><h2 id="flight-snapshot-title">Flight Snapshot</h2></div><button class="flight-snapshot-close" type="button" aria-label="Close Flight Snapshot">×</button></header>
+          <div class="flight-snapshot-route"><strong id="snapshot-flight-number">Flight number —</strong><span id="snapshot-route">Destination not selected</span><small id="snapshot-origin" hidden></small></div>
+          <section class="flight-snapshot-section"><h3>Passenger Figures</h3><div class="flight-snapshot-passengers"><div><span>Business</span><strong id="snapshot-business">0</strong></div><div><span>Premium Economy</span><strong id="snapshot-premium">0</strong></div><div><span>Economy</span><strong id="snapshot-economy">0</strong></div><div><span>Infants</span><strong id="snapshot-infants">0</strong></div><div><span>PRMs</span><strong id="snapshot-prms">0</strong></div><div class="snapshot-total"><span>Total passengers</span><strong id="snapshot-total">0</strong></div></div></section>
+          <section class="flight-snapshot-section"><h3>Flight Timings</h3><div class="flight-snapshot-timings"><div><span>Pushback</span><strong id="snapshot-pushback">Not entered</strong></div><div><span>Taxi</span><strong id="snapshot-taxi">Not entered</strong></div><div><span>Flight time</span><strong id="snapshot-duration">Not entered</strong></div><div><span>Estimated arrival · Dublin</span><strong id="snapshot-arrival-dublin">Not calculated</strong></div><div class="snapshot-destination-arrival"><span id="snapshot-destination-label">Estimated arrival · destination</span><strong id="snapshot-arrival-destination">Not calculated</strong></div></div></section>
+          <section class="flight-snapshot-section snapshot-notes-section"><h3>Flight Notes</h3><p id="snapshot-notes">No notes entered</p></section>
+        </div>
+      </dialog>
     </form>`;
 
   const form = content.querySelector('#flight-information-form');
@@ -1066,6 +1081,15 @@ function renderFlightInformation() {
   };
   form.addEventListener('input', handleFlightInput);
   form.addEventListener('change', handleFlightInput);
+  form.elements.flightNumber.addEventListener('change', () => {
+    const selectedFlight = form.elements.flightNumber.value === '' ? null : data.flightSchedule[Number(form.elements.flightNumber.value)];
+    form.elements.destination.value = selectedFlight?.destinationCode || '';
+    form.elements.destination.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  form.elements.destination.addEventListener('change', () => {
+    const selectedFlight = form.elements.flightNumber.value === '' ? null : data.flightSchedule[Number(form.elements.flightNumber.value)];
+    if (selectedFlight && selectedFlight.destinationCode !== form.elements.destination.value) form.elements.flightNumber.value = '';
+  });
   content.querySelector('#use-current-pushback-time').addEventListener('click', () => {
     const selectedZone = form.elements.destination.value === 'DUB'
       ? destinationTimeZones[form.elements.originAirport.value]
@@ -1086,28 +1110,49 @@ function renderFlightInformation() {
     saveStatus.textContent = 'Flight information cleared from this page.';
     updateFlightSummary();
   });
-  content.querySelector('#copy-flight-information').addEventListener('click', async () => {
+  const snapshot = content.querySelector('#flight-snapshot');
+  const snapshotValue = (selector, value) => { content.querySelector(selector).textContent = value || 'Not entered'; };
+  const updateFlightSnapshot = () => {
     const values = Object.fromEntries(new FormData(form).entries());
-    const destination = data.destinations.find(item => item.code === values.destination)?.name || values.destination || 'Not selected';
-    const summary = [
-      'AerKit Flight Summary', `Destination: ${destination}`,
-      ...(values.originAirport ? [`Origin: ${data.destinations.find(item => item.code === values.originAirport)?.name || values.originAirport}`] : []),
-      `Passengers (including infants): ${content.querySelector('#passenger-total').textContent}`,
-      `Infants: ${values.infants || '0'} · PRMs (separate): ${values.prms || '0'}`,
-      `Pushback: ${values.pushback || 'Not entered'} · ${content.querySelector('#pushback-time-zone').textContent.replace(/^Time zone used: /, '')}`,
-      `Taxi: ${values.taxiMinutes ? `${values.taxiMinutes} minutes` : 'Not entered'}`,
-      `Flight time: ${values.flightHours || '0'}h ${values.flightMinutes || '0'}m`,
-      `Estimated arrival Dublin: ${content.querySelector('#estimated-arrival-dublin').textContent}`,
-      `Estimated arrival destination: ${content.querySelector('#estimated-arrival-destination').textContent}`,
-      ...(values.flightInformation ? [`Flight notes: ${values.flightInformation}`] : [])
-    ].join('\n');
-    try {
-      await navigator.clipboard.writeText(summary);
-      saveStatus.textContent = 'Flight summary copied to clipboard.';
-    } catch {
-      saveStatus.textContent = 'Clipboard unavailable. Select and copy the flight details manually.';
-    }
+    const destination = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].find(item => item.code === values.destination);
+    const flight = values.flightNumber === '' ? null : data.flightSchedule[Number(values.flightNumber)];
+    snapshotValue('#snapshot-flight-number', flight?.flightNumber || 'Flight number not selected');
+    snapshotValue('#snapshot-route', destination ? `${destination.name} (${destination.code})` : 'Destination not selected');
+    const origin = data.destinations.find(item => item.code === values.originAirport);
+    const originLine = content.querySelector('#snapshot-origin');
+    originLine.hidden = !origin;
+    originLine.textContent = origin ? `Origin: ${origin.name} (${origin.code})` : '';
+    snapshotValue('#snapshot-business', values.business || '0');
+    snapshotValue('#snapshot-premium', values.premiumEconomy || '0');
+    snapshotValue('#snapshot-economy', values.economy || '0');
+    snapshotValue('#snapshot-infants', values.infants || '0');
+    snapshotValue('#snapshot-prms', values.prms || '0');
+    snapshotValue('#snapshot-total', content.querySelector('#passenger-total').textContent);
+    const zone = content.querySelector('#pushback-time-zone').textContent.replace(/^Time zone used: /, '');
+    snapshotValue('#snapshot-pushback', values.pushback ? `${values.pushback.replace('T', ' ')} · ${zone}` : 'Not entered');
+    snapshotValue('#snapshot-taxi', values.taxiMinutes ? `${values.taxiMinutes} minutes` : 'Not entered');
+    snapshotValue('#snapshot-duration', values.flightHours || values.flightMinutes ? `${values.flightHours || '0'}h ${values.flightMinutes || '0'}m` : 'Not entered');
+    snapshotValue('#snapshot-arrival-dublin', content.querySelector('#estimated-arrival-dublin').textContent);
+    snapshotValue('#snapshot-arrival-destination', content.querySelector('#estimated-arrival-destination').textContent);
+    const destinationLabel = content.querySelector('#snapshot-destination-label');
+    destinationLabel.textContent = destination ? `Estimated arrival · ${destination.name}` : 'Estimated arrival · destination';
+    snapshotValue('#snapshot-notes', values.flightInformation?.trim() || 'No notes entered');
+  };
+  content.querySelector('#flight-snapshot-button').addEventListener('click', () => {
+    updateFlightSnapshot();
+    snapshot.showModal();
+    const snapshotShell = snapshot.querySelector('.flight-snapshot-shell');
+    snapshotShell.style.zoom = '1';
+    requestAnimationFrame(() => {
+      const naturalHeight = snapshotShell.scrollHeight;
+      const availableHeight = snapshotShell.clientHeight;
+      if (naturalHeight > availableHeight) snapshotShell.style.zoom = String(availableHeight / naturalHeight);
+    });
+    snapshot.querySelector('.flight-snapshot-close').focus();
   });
+  snapshot.querySelector('.flight-snapshot-close').addEventListener('click', () => snapshot.close());
+  snapshot.addEventListener('click', event => { if (event.target === snapshot) snapshot.close(); });
+  snapshot.addEventListener('close', () => content.querySelector('#flight-snapshot-button').focus());
 }
 
 function wallTimeToDate(value, timeZone) {
