@@ -15,27 +15,8 @@
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <section class="auth-gate" id="auth-gate" aria-labelledby="auth-title">
-    <div class="auth-card">
-      <img src="assets/AerKit.png" alt="" class="auth-logo">
-      <p class="auth-eyebrow">AER LINGUS CREW ACCESS</p>
-      <h1 id="auth-title">Sign in to AerKit</h1>
-      <p class="auth-description">Enter your @aerlingus.com email address and we’ll send you a one-time sign-in code.</p>
-      <div class="auth-enrolment">
-        <form id="otp-form">
-          <label for="auth-email">Aer Lingus email</label>
-          <input id="auth-email" name="email" type="email" autocomplete="email" required pattern=".+@aerlingus\.com" placeholder="name@aerlingus.com">
-          <label id="otp-code-field" for="auth-otp" hidden>One-time code</label>
-          <input id="auth-otp" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit code" hidden>
-          <button id="otp-submit" class="auth-secondary" type="submit">Email me a sign-in code</button>
-          <button id="otp-resend" class="auth-link-button" type="button" hidden>Send a new code</button>
-        </form>
-      </div>
-      <p id="auth-status" class="auth-status" role="status" aria-live="polite"></p>
-    </div>
-  </section>
-  <div id="app-shell" hidden>
-  <aside class="preview-banner" id="preview-banner" hidden><strong>LOCAL PREVIEW</strong><span>Using synthetic sample data. Sign-in and feedback submission are disabled.</span></aside>
+  <div id="app-shell">
+  <aside class="preview-banner"><strong>DEVELOPMENT PREVIEW</strong><span>Using synthetic sample data. Feedback submission is disabled.</span></aside>
   <header class="topbar" id="top">
     <div class="top-actions">
       <div class="search-wrap" role="search" aria-label="Search reference">
@@ -45,7 +26,6 @@
       <a class="home-button" href="#content-area" aria-label="Home: Crew essentials"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
       <button class="icon-button theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 15.5A9 9 0 0 1 8.5 3.2 9 9 0 1 0 20.8 15.5Z"/></svg></button>
       <button class="icon-button" id="install-button" hidden>Install</button>
-      <button class="icon-button signout-button" id="auth-signout" type="button" aria-label="Sign out" title="Sign out"><svg class="signout-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg></button>
     </div>
   </header>
   <main id="main-content">
@@ -72,11 +52,10 @@
       </div>
     </nav>
     <section class="content-area" id="content-area" aria-live="polite"></section>
-  <footer><span>AERKIT</span><span>App V1.2</span><span id="sync-status" role="status">Protected references loaded</span></footer>
+  <footer><span>AERKIT</span><span>App V1.2</span><span id="sync-status" role="status">Sample data loaded</span></footer>
   </main>
   </div>
-  <script src="supabase-config.js"></script>
-  <script src="preview-data.js"></script>
-  <script src="auth.js?v=otp-email-20261122"></script>
+  <script src="preview-data.js?v=sample-preview-20261122"></script>
+  <script src="app.js?v=flight-layout-20261122"></script>
 </body>
 </html>

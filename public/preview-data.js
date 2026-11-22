@@ -1,6 +1,7 @@
-// Synthetic UI fixture for file:// and localhost previews. Never put real
-// reference, contact, roster, payroll, or operational data in this file.
-window.AERKIT_PREVIEW_DATA = {
+// Synthetic public fixture used by the unauthenticated development build.
+// Never put real reference, contact, roster, payroll, or operational data here.
+window.AERKIT_PREVIEW_MODE = true;
+window.CSM_DATA = {
   informationLastUpdated: 'Sample data only',
   overnightAllowanceVersion: 'Sample rates',
   destinations: [
