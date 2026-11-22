@@ -34,7 +34,7 @@
     banner.hidden = false;
     document.querySelector('#auth-signout').hidden = true;
     const script = document.createElement('script');
-    script.src = './app.js?v=flight-snapshot-20261121-r4';
+    script.src = './app.js?v=flight-layout-20261122';
     script.onerror = () => {
       shell.hidden = true;
       gate.hidden = false;
@@ -82,7 +82,7 @@
     appStarted = true;
     setStatus('');
     const script = document.createElement('script');
-    script.src = './app.js?v=flight-snapshot-20261121-r4';
+    script.src = './app.js?v=flight-layout-20261122';
     script.onerror = () => setStatus('AerKit could not finish loading.', true);
     document.body.append(script);
   }

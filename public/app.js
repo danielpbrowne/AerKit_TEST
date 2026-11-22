@@ -111,6 +111,9 @@ const destinationAirportCoordinates = {
   SEA: [47.4502, -122.3088], YYZ: [43.6777, -79.6248], IAD: [38.9531, -77.4565]
 };
 const destinationWeatherCache = new Map();
+const flightWeatherCache = new Map();
+let flightWeatherRequestId = 0;
+let flightWeatherUpdateTimer;
 
 function setActive(id) {
   document.querySelectorAll('.quick-links button').forEach(button => {
@@ -935,20 +938,21 @@ function renderAircraft() {
 }
 
 function renderFlightInformation() {
-  const destinationOptions = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].sort((a, b) => a.name.localeCompare(b.name))
-    .map(destination => `<option value="${escapeHtml(destination.code)}">${escapeHtml(destination.name)} (${escapeHtml(destination.code)})</option>`).join('');
-  const originOptions = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name))
-    .map(origin => `<option value="${escapeHtml(origin.code)}">${escapeHtml(origin.name)} (${escapeHtml(origin.code)})</option>`).join('');
+  const routeAirports = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].sort((a, b) => a.name.localeCompare(b.name));
+  const departureAirportOptions = routeAirports
+    .map(airport => `<option value="${escapeHtml(airport.code)}">${escapeHtml(airport.name)} (${escapeHtml(airport.code)})</option>`).join('');
+  const arrivalAirportOptions = routeAirports
+    .map(airport => `<option value="${escapeHtml(airport.code)}">${escapeHtml(airport.name)} (${escapeHtml(airport.code)})</option>`).join('');
   content.innerHTML = heading('', sections.flightInfo.title, sections.flightInfo.desc)
     + `<form class="flight-form" id="flight-information-form" autocomplete="off">
+      <section class="flight-panel flight-route-panel"><div class="flight-panel-head"><h3>Where are you going?</h3></div>
+        <div class="flight-fields flight-route-fields">
+          <label class="flight-field"><span>Departure</span><select name="originAirport" id="origin-airport"><option value="">Select</option>${departureAirportOptions}</select></label>
+          <label class="flight-field"><span>Arrival</span><select name="destination"><option value="">Select</option>${arrivalAirportOptions}</select></label>
+        </div>
+      </section>
       <div class="flight-form-grid">
-        <section class="flight-panel route-panel"><div class="flight-panel-head"><h3>Destination</h3></div>
-          <div class="flight-fields route-fields">
-            <label class="flight-field"><span>Destination</span><select name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
-            <label class="flight-field origin-airport-field" id="origin-airport-wrap" hidden><span>Origin airport</span><select name="originAirport" id="origin-airport"><option value="">Select origin airport</option>${originOptions}</select></label>
-          </div>
-        </section>
-        <section class="flight-panel"><div class="flight-panel-head"><h3>Passenger Figures</h3></div>
+        <section class="flight-panel"><div class="flight-panel-head"><h3>Passenger Numbers</h3></div>
           <div class="passenger-counts">
             <label class="flight-field"><span>Business Class</span><input name="business" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="0"></label>
             <label class="flight-field"><span>Premium Economy</span><input name="premiumEconomy" type="number" min="0" max="28" step="1" inputmode="numeric" placeholder="0"></label>
@@ -960,9 +964,9 @@ function renderFlightInformation() {
           </div>
           <div class="passenger-total"><span>TOTAL PAX · INCLUDES INFANTS</span><strong id="passenger-total">0</strong></div>
         </section>
-        <section class="flight-panel"><div class="flight-panel-head"><h3>Flight Timings</h3></div>
+        <section class="flight-panel"><div class="flight-panel-head"><h3>Flight Times</h3></div>
           <div class="flight-fields">
-            <div class="flight-field pushback-time-field"><label for="pushback-time">Pushback time</label><input id="pushback-time" name="pushback" type="datetime-local" aria-describedby="pushback-time-zone"><small id="pushback-time-zone" role="status" aria-live="polite">Time zone used: Dublin (Europe/Dublin)</small><button class="current-time-button" type="button" id="use-current-pushback-time">Use current time</button></div>
+            <div class="flight-pushback-row"><div class="flight-field pushback-time-field"><label for="pushback-time">Pushback time</label><input id="pushback-time" name="pushback" type="datetime-local" aria-describedby="pushback-time-zone"><small id="pushback-time-zone" role="status" aria-live="polite">Select a departure airport to set the time zone.</small></div><button class="current-time-button" type="button" id="use-current-pushback-time">Use Current Time</button></div>
             <div class="flight-duration-pair">
               <label class="flight-field taxi-minutes-field"><span>Taxi (mins)</span><input name="taxiMinutes" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></label>
               <fieldset class="flight-field duration-field"><legend>Flight Time</legend><div><label><input name="flightHours" type="number" min="0" max="30" inputmode="numeric" placeholder="0"><small>hours</small></label><b>:</b><label><input name="flightMinutes" type="number" min="0" max="59" inputmode="numeric" placeholder="00"><small>minutes</small></label></div></fieldset>
@@ -970,26 +974,45 @@ function renderFlightInformation() {
           </div>
           <div class="arrival-summary"><span>ESTIMATED TIME OF ARRIVAL</span><div class="arrival-time"><small>DUBLIN LOCAL TIME</small><strong id="estimated-arrival-dublin">Enter the required times</strong></div><div class="arrival-time"><small id="destination-arrival-label">DESTINATION LOCAL TIME</small><strong id="estimated-arrival-destination">Select destination</strong></div></div>
         </section>
-        <section class="flight-panel notes-panel"><div class="flight-panel-head"><span class="card-tag">FLIGHT NOTES</span></div>
+        <section class="flight-panel notes-panel">
           <div class="flight-fields notes-fields">
             <label class="flight-field"><span>Flight notes</span><textarea name="flightInformation" rows="3" placeholder="Add operational notes such as weather, turbulence, delays or other items to brief the crew."></textarea></label>
           </div>
         </section>
+        <section class="flight-panel flight-weather-panel" aria-labelledby="flight-weather-title">
+          <div class="flight-panel-head flight-weather-head"><h3 id="flight-weather-title">Departure &amp; Arrival Forecast</h3><button class="weather-refresh-button" type="button" id="refresh-flight-weather">Refresh</button></div>
+          <p class="flight-weather-intro">Hourly forecast for your planned pushback and arrival times, with conditions, temperature, rain chance, wind and visibility.</p>
+          <div class="flight-weather-grid">
+            <article class="flight-weather-card"><h4 id="flight-weather-origin-title">Departure airport</h4><div id="flight-weather-origin" class="flight-weather-details">Select a route and pushback time for a forecast.</div></article>
+            <article class="flight-weather-card"><h4 id="flight-weather-destination-title">Arrival airport</h4><div id="flight-weather-destination" class="flight-weather-details">Enter flight and taxi times for an arrival forecast.</div></article>
+          </div>
+          <p id="flight-weather-status" class="flight-weather-status" role="status" aria-live="polite">Forecasts are supplied by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.</p>
+        </section>
       </div>
-      <div class="flight-form-footer"><small id="flight-save-status" role="status">Entries stay in this page only and are cleared when you leave. PRMs are recorded separately and are not included in passenger total.</small><div class="flight-footer-actions"><button class="clear-flight-button" type="button" id="flight-snapshot-button">Flight Snapshot</button><button class="clear-flight-button" type="button" id="clear-flight-information">Clear Flight Information</button></div></div>
-      <dialog class="flight-snapshot-dialog" id="flight-snapshot" aria-labelledby="flight-snapshot-title">
-        <div class="flight-snapshot-shell">
-          <header class="flight-snapshot-header"><div><span class="card-tag">AERKIT · FLIGHT INFORMATION</span><h2 id="flight-snapshot-title">Flight Snapshot</h2></div><button class="flight-snapshot-close" type="button" aria-label="Close Flight Snapshot">×</button></header>
-          <div class="flight-snapshot-route"><strong id="snapshot-route">Destination not selected</strong><small id="snapshot-origin" hidden></small><small id="snapshot-weather">Destination weather not loaded</small></div>
-          <section class="flight-snapshot-section"><h3>Passenger Figures</h3><div class="flight-snapshot-passengers"><div><span>Business</span><strong id="snapshot-business">0</strong></div><div><span>Premium Economy</span><strong id="snapshot-premium">0</strong></div><div><span>Economy</span><strong id="snapshot-economy">0</strong></div><div><span>Infants</span><strong id="snapshot-infants">0</strong></div><div><span>PRMs</span><strong id="snapshot-prms">0</strong></div><div class="snapshot-total"><span>Total passengers</span><strong id="snapshot-total">0</strong></div></div></section>
-          <section class="flight-snapshot-section"><h3>Flight Timings</h3><div class="flight-snapshot-timings"><div class="snapshot-pushback"><span>Pushback</span><strong id="snapshot-pushback">Not entered</strong></div><div class="snapshot-taxi-flight"><div><span>Taxi</span><strong id="snapshot-taxi">Not entered</strong></div><div><span>Flight duration</span><strong id="snapshot-duration">Not entered</strong></div></div><div class="snapshot-arrival"><span>Estimated arrival · Dublin</span><strong id="snapshot-arrival-dublin">Not calculated</strong></div><div class="snapshot-arrival"><span id="snapshot-destination-label">Estimated arrival · destination</span><strong id="snapshot-arrival-destination">Not calculated</strong></div></div></section>
-          <section class="flight-snapshot-section snapshot-notes-section"><h3>Flight Notes</h3><p id="snapshot-notes">No notes entered</p></section>
-        </div>
-      </dialog>
-    </form>`;
+      <div class="flight-form-footer"><div class="flight-footer-actions"><button class="clear-flight-button" type="button" id="show-flight-snapshot">Flight Snapshot</button><button class="clear-flight-button" type="button" id="clear-flight-information">Clear Flight Information</button></div></div>
+    </form>
+    <dialog class="flight-snapshot-dialog" id="flight-snapshot-dialog" aria-labelledby="flight-snapshot-title">
+      <article class="flight-snapshot-card">
+        <header class="flight-snapshot-header"><span class="card-tag">AERKIT · FLIGHT SNAPSHOT</span><button class="snapshot-close" type="button" aria-label="Close Flight Snapshot">×</button></header>
+        <h2 id="flight-snapshot-title">Flight Snapshot</h2>
+        <div id="flight-snapshot-content" class="flight-snapshot-content"></div>
+      </article>
+    </dialog>`;
 
   const form = content.querySelector('#flight-information-form');
-  const saveStatus = content.querySelector('#flight-save-status');
+  const updateArrivalOptions = () => {
+    const originCode = form.elements.originAirport.value;
+    const selectedArrival = form.elements.destination.value;
+    const allowedArrivals = originCode === 'DUB'
+      ? data.destinations
+      : originCode
+        ? [{ name: 'Dublin', code: 'DUB' }]
+        : routeAirports;
+    form.elements.destination.innerHTML = '<option value="">Select</option>' + allowedArrivals
+      .map(airport => `<option value="${escapeHtml(airport.code)}">${escapeHtml(airport.name)} (${escapeHtml(airport.code)})</option>`).join('');
+    form.elements.destination.value = allowedArrivals.some(airport => airport.code === selectedArrival) ? selectedArrival : '';
+  };
+  updateArrivalOptions();
   const cappedPassengerFields = { business: 30, premiumEconomy: 28 };
   const capPassengerCounts = () => {
     Object.entries(cappedPassengerFields).forEach(([name, maximum]) => {
@@ -1005,15 +1028,6 @@ function renderFlightInformation() {
     localStorage.removeItem('csm-flight-information-v1');
   } catch {}
 
-  const formatZonedDateTime = (date, timeZone) => {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-      hourCycle: 'h23', timeZoneName: 'short'
-    }).formatToParts(date);
-    const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
-    return `${values.hour}:${values.minute} ${values.timeZoneName} | ${values.day}-${values.month}`;
-  };
-
   const updateFlightSummary = () => {
     const total = ['business', 'premiumEconomy', 'economy', 'infants'].reduce((sum, name) => sum + Math.max(0, Number(form.elements[name].value) || 0), 0);
     content.querySelector('#passenger-total').textContent = total.toLocaleString('en-IE');
@@ -1026,23 +1040,15 @@ function renderFlightInformation() {
     const hasTaxiTime = form.elements.taxiMinutes.value !== '';
     const estimatedDublin = content.querySelector('#estimated-arrival-dublin');
     const estimatedDestination = content.querySelector('#estimated-arrival-destination');
-    const originWrap = content.querySelector('#origin-airport-wrap');
     const originAirport = form.elements.originAirport;
     const pushbackTimeZone = content.querySelector('#pushback-time-zone');
-    const isDublinDestination = form.elements.destination.value === 'DUB';
-    originWrap.hidden = !isDublinDestination;
-    originAirport.required = isDublinDestination;
-    if (!isDublinDestination) originAirport.value = '';
-    const destination = data.destinations.find(item => item.code === form.elements.destination.value)
-      || (form.elements.destination.value === 'DUB' ? { name: 'Dublin', code: 'DUB' } : null);
-    const origin = data.destinations.find(item => item.code === originAirport.value);
-    const pushbackZone = isDublinDestination ? destinationTimeZones[originAirport.value] : 'Europe/Dublin';
-    const pushbackZoneLabel = isDublinDestination
-      ? (origin && pushbackZone ? `${origin.name} (${pushbackZone})` : '')
-      : `Dublin (${pushbackZone})`;
+    const destination = getFlightAirport(form.elements.destination.value);
+    const origin = getFlightAirport(originAirport.value);
+    const pushbackZone = destinationTimeZones[originAirport.value];
+    const pushbackZoneLabel = origin && pushbackZone ? `${origin.name} (${pushbackZone})` : '';
     pushbackTimeZone.textContent = pushbackZoneLabel
       ? `Time zone used: ${pushbackZoneLabel}`
-      : 'Select an origin airport to set the pushback time zone.';
+      : 'Select a departure airport to set the pushback time zone.';
     content.querySelector('#use-current-pushback-time').disabled = !pushbackZone;
     content.querySelector('#destination-arrival-label').textContent = destination
       ? `ESTIMATED ARRIVAL · ${destination.name.toUpperCase()} LOCAL TIME`
@@ -1055,8 +1061,8 @@ function renderFlightInformation() {
     }
 
     if (!pushbackZone) {
-      estimatedDublin.textContent = 'Select an origin airport to set the pushback time zone';
-      estimatedDestination.textContent = 'Select an origin airport to set the pushback time zone';
+      estimatedDublin.textContent = 'Select a departure airport to set the pushback time zone';
+      estimatedDestination.textContent = 'Select a departure airport to set the pushback time zone';
       return;
     }
 
@@ -1076,23 +1082,31 @@ function renderFlightInformation() {
     }
 
     const arrival = new Date(pushback.getTime() + (flightHours * 60 + flightMinutes + taxiMinutes) * 60_000);
-    estimatedDublin.textContent = formatZonedDateTime(arrival, 'Europe/Dublin');
+    estimatedDublin.textContent = formatFlightTime(arrival, 'Europe/Dublin');
     const destinationTimeZone = destinationTimeZones[destination?.code];
     estimatedDestination.textContent = destination
-      ? (destinationTimeZone ? formatZonedDateTime(arrival, destinationTimeZone) : 'Time zone unavailable')
+      ? (destinationTimeZone ? formatFlightTime(arrival, destinationTimeZone) : 'Time zone unavailable')
       : 'Select destination';
   };
 
-  const handleFlightInput = () => {
+  const handleFlightInput = event => {
+    if (event.target.name === 'originAirport') updateArrivalOptions();
     capPassengerCounts();
     updateFlightSummary();
   };
   form.addEventListener('input', handleFlightInput);
   form.addEventListener('change', handleFlightInput);
+  const weatherFields = ['destination', 'originAirport', 'pushback', 'flightHours', 'flightMinutes', 'taxiMinutes'];
+  const scheduleWeatherUpdate = event => {
+    if (!weatherFields.includes(event.target.name)) return;
+    clearTimeout(flightWeatherUpdateTimer);
+    flightWeatherUpdateTimer = setTimeout(() => updateFlightWeather(), 450);
+  };
+  form.addEventListener('input', scheduleWeatherUpdate);
+  form.addEventListener('change', scheduleWeatherUpdate);
+  content.querySelector('#refresh-flight-weather').addEventListener('click', () => updateFlightWeather({ force: true }));
   content.querySelector('#use-current-pushback-time').addEventListener('click', () => {
-    const selectedZone = form.elements.destination.value === 'DUB'
-      ? destinationTimeZones[form.elements.originAirport.value]
-      : 'Europe/Dublin';
+    const selectedZone = destinationTimeZones[form.elements.originAirport.value];
     if (!selectedZone) return;
     const now = new Date();
     const pad = value => String(value).padStart(2, '0');
@@ -1103,64 +1117,215 @@ function renderFlightInformation() {
   });
   window.addEventListener('pagehide', () => form.reset(), { once: true });
   updateFlightSummary();
+  updateFlightWeather();
 
   content.querySelector('#clear-flight-information').addEventListener('click', () => {
     form.reset();
-    saveStatus.textContent = 'Flight information cleared from this page.';
+    updateArrivalOptions();
     updateFlightSummary();
+    updateFlightWeather();
   });
-  const snapshot = content.querySelector('#flight-snapshot');
-  const snapshotValue = (selector, value) => { content.querySelector(selector).textContent = value || 'Not entered'; };
-  const updateFlightSnapshot = () => {
+  content.querySelector('#show-flight-snapshot').addEventListener('click', () => {
     const values = Object.fromEntries(new FormData(form).entries());
-    const destination = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].find(item => item.code === values.destination);
-    snapshotValue('#snapshot-route', destination ? `${destination.name} (${destination.code})` : 'Destination not selected');
-    const origin = data.destinations.find(item => item.code === values.originAirport);
-    const originLine = content.querySelector('#snapshot-origin');
-    originLine.hidden = !origin;
-    originLine.textContent = origin ? `Origin: ${origin.name} (${origin.code})` : '';
-    snapshotValue('#snapshot-business', values.business || '0');
-    snapshotValue('#snapshot-premium', values.premiumEconomy || '0');
-    snapshotValue('#snapshot-economy', values.economy || '0');
-    snapshotValue('#snapshot-infants', values.infants || '0');
-    snapshotValue('#snapshot-prms', values.prms || '0');
-    snapshotValue('#snapshot-total', content.querySelector('#passenger-total').textContent);
-    const pushbackZone = values.destination === 'DUB' ? destinationTimeZones[values.originAirport] : 'Europe/Dublin';
-    const pushbackDate = values.pushback && pushbackZone ? wallTimeToDate(values.pushback, pushbackZone) : null;
-    snapshotValue('#snapshot-pushback', pushbackDate && Number.isFinite(pushbackDate.getTime())
-      ? formatZonedDateTime(pushbackDate, pushbackZone)
-      : 'Not entered');
-    snapshotValue('#snapshot-taxi', values.taxiMinutes ? `${values.taxiMinutes} minutes` : 'Not entered');
-    snapshotValue('#snapshot-duration', values.flightHours || values.flightMinutes ? `${values.flightHours || '0'}h ${values.flightMinutes || '0'}m` : 'Not entered');
-    snapshotValue('#snapshot-arrival-dublin', content.querySelector('#estimated-arrival-dublin').textContent);
-    snapshotValue('#snapshot-arrival-destination', content.querySelector('#estimated-arrival-destination').textContent);
-    const destinationLabel = content.querySelector('#snapshot-destination-label');
-    destinationLabel.textContent = destination ? `Estimated arrival · ${destination.name}` : 'Estimated arrival · destination';
-    snapshotValue('#snapshot-notes', values.flightInformation?.trim() || 'No notes entered');
-  };
-  content.querySelector('#flight-snapshot-button').addEventListener('click', async () => {
-    updateFlightSnapshot();
-    snapshot.showModal();
-    const destinationCode = form.elements.destination.value;
-    const destination = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations].find(item => item.code === destinationCode);
-    const weatherOutput = content.querySelector('#snapshot-weather');
-    weatherOutput.textContent = destination ? 'Destination weather · Loading…' : 'Select a destination for weather';
-    const weather = destination ? await getDestinationWeather(destination) : null;
-    if (snapshot.open && form.elements.destination.value === destinationCode && weather) {
-      weatherOutput.textContent = `Weather · ${weather.text || 'Unavailable'} · Open-Meteo`;
+    const destination = getFlightAirport(values.destination)?.name || 'Not selected';
+    const origin = getFlightAirport(values.originAirport)?.name;
+    const snapshotPushbackZone = destinationTimeZones[values.originAirport];
+    const pushback = values.pushback && snapshotPushbackZone
+      ? formatFlightTime(wallTimeToDate(values.pushback, snapshotPushbackZone), snapshotPushbackZone)
+      : 'Not entered';
+    const pax = ['business', 'premiumEconomy', 'economy', 'infants'].reduce((sum, name) => sum + Math.max(0, Number(values[name]) || 0), 0);
+    const flightTime = `${values.flightHours || '0'}h ${values.flightMinutes || '0'}m`;
+    const rows = [
+      ['Route', `${origin ? `${origin} → ` : ''}${destination}`],
+      ['Pushback', pushback],
+      ['Flight time', flightTime],
+      ['Taxi', values.taxiMinutes ? `${values.taxiMinutes} min` : 'Not entered'],
+      ['Passengers', [['Business', values.business || '0'], ['Premium Economy', values.premiumEconomy || '0'], ['Economy', values.economy || '0'], ['INF', values.infants || '0'], ['PRM', values.prms || '0']]],
+      ['Total Passengers', String(pax)],
+      ['Dublin arrival', content.querySelector('#estimated-arrival-dublin').textContent],
+      ['Local arrival', content.querySelector('#estimated-arrival-destination').textContent],
+      ['Flight notes', values.flightInformation || 'None']
+    ];
+    content.querySelector('#flight-snapshot-content').innerHTML = rows.map(([label, value]) => {
+      const rowClass = label === 'Total Passengers' ? ' snapshot-total-row' : '';
+      if (label === 'Passengers') {
+        const passengers = value.map(([name, count]) => `<div><span>${escapeHtml(name)}</span><strong>${escapeHtml(count)}</strong></div>`).join('');
+        return `<section class="snapshot-row snapshot-passenger-row"><span>${escapeHtml(label)}</span><div class="snapshot-passenger-list">${passengers}</div></section>`;
+      }
+      const formattedValue = escapeHtml(value);
+      return `<section class="snapshot-row${rowClass}"><span>${escapeHtml(label)}</span><strong>${formattedValue}</strong></section>`;
     }
-    const snapshotShell = snapshot.querySelector('.flight-snapshot-shell');
-    snapshotShell.style.zoom = '1';
-    requestAnimationFrame(() => {
-      const naturalHeight = snapshotShell.scrollHeight;
-      const availableHeight = snapshotShell.clientHeight;
-      if (naturalHeight > availableHeight) snapshotShell.style.zoom = String(availableHeight / naturalHeight);
-    });
-    snapshot.querySelector('.flight-snapshot-close').focus();
+    ).join('');
+    content.querySelector('#flight-snapshot-dialog').showModal();
   });
-  snapshot.querySelector('.flight-snapshot-close').addEventListener('click', () => snapshot.close());
-  snapshot.addEventListener('click', event => { if (event.target === snapshot) snapshot.close(); });
-  snapshot.addEventListener('close', () => content.querySelector('#flight-snapshot-button').focus());
+  const snapshotDialog = content.querySelector('#flight-snapshot-dialog');
+  snapshotDialog.querySelector('.snapshot-close').addEventListener('click', () => snapshotDialog.close());
+  snapshotDialog.addEventListener('click', event => { if (event.target === snapshotDialog) snapshotDialog.close(); });
+}
+
+function formatFlightTime(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23', timeZoneName: 'short'
+  }).formatToParts(date);
+  const part = type => parts.find(item => item.type === type)?.value || '';
+  return `${part('hour')}:${part('minute')} ${part('timeZoneName')} | ${part('day')}-${part('month')}`;
+}
+
+async function updateFlightWeather({ force = false } = {}) {
+  const form = document.querySelector('#flight-information-form');
+  const panel = document.querySelector('.flight-weather-panel');
+  if (!form || !panel) return;
+  const requestId = ++flightWeatherRequestId;
+  const destinationCode = form.elements.destination.value;
+  const originCode = form.elements.originAirport.value;
+  const origin = getFlightAirport(originCode);
+  const destination = getFlightAirport(destinationCode);
+  const originTitle = panel.querySelector('#flight-weather-origin-title');
+  const destinationTitle = panel.querySelector('#flight-weather-destination-title');
+  const originOutput = panel.querySelector('#flight-weather-origin');
+  const destinationOutput = panel.querySelector('#flight-weather-destination');
+  const status = panel.querySelector('#flight-weather-status');
+
+  originTitle.textContent = origin ? `Departure · ${origin.name}` : 'Departure airport';
+  destinationTitle.textContent = destination ? `Arrival · ${destination.name}` : 'Arrival airport';
+  status.innerHTML = 'Forecast data from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.';
+
+  if (!destination) {
+    originOutput.textContent = 'Select a destination and planned pushback time for a forecast.';
+    destinationOutput.textContent = 'Enter the flight and taxi times to forecast arrival conditions.';
+    return;
+  }
+  if (!origin) {
+    originOutput.textContent = 'Select an origin airport to forecast departure conditions.';
+    destinationOutput.textContent = 'Select an origin airport to forecast arrival conditions.';
+    status.textContent = 'Choose the origin airport to forecast both ends of this route.';
+    return;
+  }
+
+  const pushbackZone = destinationTimeZones[originCode];
+  const pushback = form.elements.pushback.value && pushbackZone
+    ? wallTimeToDate(form.elements.pushback.value, pushbackZone)
+    : new Date(NaN);
+  const flightHours = Number(form.elements.flightHours.value) || 0;
+  const flightMinutes = Number(form.elements.flightMinutes.value) || 0;
+  const taxiMinutes = Number(form.elements.taxiMinutes.value) || 0;
+  const hasFlightTime = form.elements.flightHours.value !== '' || form.elements.flightMinutes.value !== '';
+  const arrival = new Date(pushback.getTime() + (flightHours * 60 + flightMinutes + taxiMinutes) * 60_000);
+  const canForecastArrival = Number.isFinite(pushback.getTime()) && hasFlightTime
+    && form.elements.taxiMinutes.value !== '' && taxiMinutes >= 1;
+
+  originOutput.textContent = Number.isFinite(pushback.getTime()) ? 'Loading departure forecast…' : 'Enter the planned pushback time for a departure forecast.';
+  destinationOutput.textContent = canForecastArrival ? 'Loading arrival forecast…' : 'Enter pushback, flight time and taxi time for an arrival forecast.';
+
+  const forecastTargets = [
+    { role: 'origin', airport: origin, time: Number.isFinite(pushback.getTime()) ? pushback : null },
+    { role: 'destination', airport: destination, time: canForecastArrival ? arrival : null }
+  ].filter(item => item.time);
+  if (!forecastTargets.length) return;
+
+  const unsupported = forecastTargets.filter(({ airport }) => !destinationAirportCoordinates[airport.code]);
+  if (unsupported.length) {
+    status.textContent = `Forecast location is unavailable for ${unsupported.map(item => item.airport.name).join(', ')}.`;
+    return;
+  }
+
+  const results = await Promise.allSettled(forecastTargets.map(async ({ airport, time }) => {
+    const hourly = await fetchHourlyForecast(airport, force);
+    return { airport, time, hourly };
+  }));
+  if (requestId !== flightWeatherRequestId) return;
+
+  let failed = false;
+  results.forEach((result, index) => {
+    const { role } = forecastTargets[index];
+    const output = role === 'origin' ? originOutput : destinationOutput;
+    if (result.status !== 'fulfilled') {
+      failed = true;
+      output.textContent = navigator.onLine === false ? 'Weather forecast unavailable offline.' : 'Forecast is temporarily unavailable.';
+      return;
+    }
+    const { airport, time, hourly } = result.value;
+    output.innerHTML = renderFlightWeatherForecast(hourly, time, destinationTimeZones[airport.code] || 'UTC');
+  });
+  if (failed) status.textContent = 'One or more forecasts could not be loaded. You can try again using Refresh.';
+}
+
+async function fetchHourlyForecast(airport, force = false) {
+  const cached = flightWeatherCache.get(airport.code);
+  if (!force && cached && Date.now() - cached.time < 20 * 60 * 1000) return cached.hourly;
+  const [latitude, longitude] = destinationAirportCoordinates[airport.code];
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.search = new URLSearchParams({
+    latitude, longitude, hourly: 'temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,cloud_cover',
+    forecast_days: '7', timezone: 'UTC', temperature_unit: 'celsius', wind_speed_unit: 'kmh'
+  });
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Forecast request failed');
+  const result = await response.json();
+  if (!Array.isArray(result.hourly?.time)) throw new Error('Forecast data unavailable');
+  flightWeatherCache.set(airport.code, { time: Date.now(), hourly: result.hourly });
+  return result.hourly;
+}
+
+function getFlightAirport(code) {
+  if (code === 'DUB') return { code: 'DUB', name: 'Dublin' };
+  return data.destinations.find(item => item.code === code) || null;
+}
+
+function renderFlightWeatherForecast(hourly, targetTime, timeZone) {
+  let selectedIndex = -1;
+  let shortestDifference = Infinity;
+  hourly.time.forEach((hour, index) => {
+    const hourTime = Date.parse(`${hour}Z`);
+    const difference = Math.abs(hourTime - targetTime.getTime());
+    if (difference < shortestDifference) {
+      selectedIndex = index;
+      shortestDifference = difference;
+    }
+  });
+  if (selectedIndex < 0 || shortestDifference > 90 * 60_000) {
+    return '<p class="flight-weather-unavailable">A forecast is not available for this time yet.</p>';
+  }
+
+  const value = key => hourly[key]?.[selectedIndex];
+  const numeric = key => {
+    const item = value(key);
+    return item === null || item === undefined || item === '' ? NaN : Number(item);
+  };
+  const [icon, condition] = weatherDescription(numeric('weather_code'));
+  const forecastTime = new Date(Date.parse(`${hourly.time[selectedIndex]}Z`));
+  const localTime = new Intl.DateTimeFormat('en-IE', {
+    timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).format(forecastTime);
+  const details = [];
+  const add = (label, text) => { if (text !== '') details.push([label, text]); };
+  const temperature = numeric('temperature_2m');
+  if (Number.isFinite(temperature)) add('Temperature', `${Math.round(temperature)}°C`);
+  const feelsLike = numeric('apparent_temperature');
+  if (Number.isFinite(feelsLike)) add('Feels like', `${Math.round(feelsLike)}°C`);
+  const rainChance = numeric('precipitation_probability');
+  const precipitation = numeric('precipitation');
+  if (Number.isFinite(rainChance)) add('Rain chance', `${Math.round(rainChance)}%${Number.isFinite(precipitation) && precipitation > 0 ? ` · ${precipitation.toFixed(1)} mm expected` : ''}`);
+  const windSpeed = numeric('wind_speed_10m');
+  if (Number.isFinite(windSpeed)) {
+    const direction = describeWindDirection(numeric('wind_direction_10m'));
+    add('Wind', `${direction ? `${direction} at ` : ''}${Math.round(windSpeed)} km/h`);
+  }
+  const gust = numeric('wind_gusts_10m');
+  if (Number.isFinite(gust)) add('Gusts', `${Math.round(gust)} km/h`);
+  const visibility = numeric('visibility');
+  if (Number.isFinite(visibility)) add('Visibility', visibility < 1000 ? 'Under 1 km' : `${(visibility / 1000).toFixed(1)} km`);
+  const clouds = numeric('cloud_cover');
+  if (Number.isFinite(clouds)) add('Cloud cover', `${Math.round(clouds)}%`);
+
+  return `<div class="flight-weather-condition"><span aria-hidden="true">${icon}</span> ${escapeHtml(condition)}</div><p class="weather-forecast-time">Forecast for ${escapeHtml(localTime)} local time</p><dl>${details.map(([label, text]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd></div>`).join('')}</dl>`;
+}
+
+function describeWindDirection(value) {
+  if (!Number.isFinite(value) || value < 0) return '';
+  const compass = ['north', 'north-northeast', 'northeast', 'east-northeast', 'east', 'east-southeast', 'southeast', 'south-southeast', 'south', 'south-southwest', 'southwest', 'west-southwest', 'west', 'west-northwest', 'northwest', 'north-northwest'];
+  return `From the ${compass[Math.round(value / 22.5) % 16]}`;
 }
 
 function wallTimeToDate(value, timeZone) {
