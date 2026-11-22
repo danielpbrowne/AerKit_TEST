@@ -30,6 +30,7 @@
 .auth-enrolment summary{cursor:pointer;text-align:center;color:#314d5d;font-size:15px;font-weight:600}
 .auth-enrolment form{margin-top:16px}.auth-enrolment label{display:block;margin:10px 0 5px;font-size:14px;font-weight:600}
 .auth-enrolment input{width:100%;height:46px;padding:0 12px;border:1px solid #bcc9ca;border-radius:4px;background:#fff;font:16px Urbanist,sans-serif;color:#192f3e}
+.auth-link-button{display:block;margin:12px auto 0;border:0;background:transparent;color:#24536d;font:600 14px Urbanist,sans-serif;text-decoration:underline;cursor:pointer}
 .auth-status{min-height:24px;margin:14px 0 0;text-align:center;color:#45646a;font-size:14px}.auth-status.is-error{color:#9d332b}
 .auth-enrolment[open] summary{margin-bottom:7px}
 .skip-link{position:fixed;z-index:30;top:8px;left:8px;padding:10px 14px;transform:translateY(-160%);border-radius:4px;background:#fff;color:#142b3b;font-weight:700}.skip-link:focus{transform:translateY(0)}

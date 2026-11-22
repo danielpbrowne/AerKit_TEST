@@ -3,10 +3,15 @@
   const gate = document.querySelector('#auth-gate');
   const shell = document.querySelector('#app-shell');
   const status = document.querySelector('#auth-status');
-  const enrolmentRequestForm = document.querySelector('#enrolment-request-form');
+  const otpForm = document.querySelector('#otp-form');
   const emailInput = document.querySelector('#auth-email');
+  const otpInput = document.querySelector('#auth-otp');
+  const otpSubmit = document.querySelector('#otp-submit');
+  const otpResend = document.querySelector('#otp-resend');
+  const otpCodeField = document.querySelector('#otp-code-field');
   let client;
   let appStarted = false;
+  let otpSent = false;
 
   const setStatus = (message, error = false) => {
     status.textContent = message;
@@ -15,16 +20,6 @@
   const isAerLingusEmail = email => typeof email === 'string'
     && email.trim().toLowerCase().split('@').length === 2
     && email.trim().toLowerCase().endsWith('@aerlingus.com');
-  const hasPasskeyAmr = token => {
-    try {
-      const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      const claims = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')));
-      return Array.isArray(claims.amr) && claims.amr.some(item => item?.method === 'passkey');
-    } catch {
-      return false;
-    }
-  };
-
   function isLocalPreviewOrigin() {
     return window.location.protocol === 'file:'
       || ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
@@ -68,13 +63,7 @@
       return;
     }
     const { data: sessionData } = await client.auth.getSession();
-    if (!sessionData.session || !hasPasskeyAmr(sessionData.session.access_token)) {
-      await client.auth.signOut();
-      gate.hidden = false;
-      shell.hidden = true;
-      setStatus('Protected references require a passkey sign-in. Email verification is only for initial enrolment.', true);
-      return;
-    }
+    if (!sessionData.session) return;
     if (appStarted) return;
     setStatus('Loading protected reference material…');
     const { data: download, error } = await client.storage.from('aerkit-private').download('reference-data.json');
@@ -110,48 +99,46 @@
     }
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.105.0');
     client = createClient(config.url, config.publishableKey, {
-      auth: { experimental: { passkey: true }, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
       global: {
         fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' })
       }
     });
 
-    document.querySelector('#passkey-signin').addEventListener('click', async event => {
-      event.currentTarget.disabled = true;
-      setStatus('Waiting for your passkey…');
-      const { data, error } = await client.auth.signInWithPasskey();
-      event.currentTarget.disabled = false;
+    async function sendOtp() {
+      const email = emailInput.value.trim();
+      if (!isAerLingusEmail(email)) return setStatus('Use an @aerlingus.com email address.', true);
+      otpSubmit.disabled = true;
+      setStatus('Sending your sign-in code…');
+      const { error } = await client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      otpSubmit.disabled = false;
+      if (error) return setStatus(error.message, true);
+      otpSent = true;
+      emailInput.readOnly = true;
+      otpCodeField.hidden = false;
+      otpInput.hidden = false;
+      otpInput.required = true;
+      otpSubmit.textContent = 'Verify code and sign in';
+      otpResend.hidden = false;
+      otpInput.focus();
+      setStatus('Check your Aer Lingus email and enter the one-time code.');
+    }
+
+    otpForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!otpSent) return sendOtp();
+      if (!isAerLingusEmail(emailInput.value)) return setStatus('Use an @aerlingus.com email address.', true);
+      otpSubmit.disabled = true;
+      setStatus('Verifying your code…');
+      const { data, error } = await client.auth.verifyOtp({
+        email: emailInput.value.trim(), token: otpInput.value.trim(), type: 'email'
+      });
+      otpSubmit.disabled = false;
       if (error) return setStatus(error.message, true);
       await showApp(data.user);
     });
 
-    async function enrolPasskey(user) {
-      if (!isAerLingusEmail(user?.email) || !user?.email_confirmed_at) {
-        await client.auth.signOut();
-        return setStatus('Only verified @aerlingus.com email addresses can enrol.', true);
-      }
-      setStatus('Email verified. Create a passkey for this Aer Lingus account…');
-      const { error: passkeyError } = await client.auth.registerPasskey();
-      if (passkeyError) return setStatus(`Passkey enrolment failed: ${passkeyError.message}`, true);
-      await client.auth.signOut();
-      setStatus('Passkey created. Sign in with it to open the protected references.');
-      const { data: passkeySession, error: signInError } = await client.auth.signInWithPasskey();
-      if (signInError) return setStatus(`Passkey created; sign-in failed: ${signInError.message}`, true);
-      await showApp(passkeySession.user);
-    }
-
-    enrolmentRequestForm.addEventListener('submit', async event => {
-      event.preventDefault();
-      const email = emailInput.value.trim();
-      if (!isAerLingusEmail(email)) return setStatus('Use an @aerlingus.com email address.', true);
-      const { error } = await client.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: true, emailRedirectTo: window.location.origin }
-      });
-      if (error) return setStatus(error.message, true);
-      enrolmentRequestForm.hidden = true;
-      setStatus('Check your Aer Lingus mailbox and follow the one-time sign-in link to enrol your passkey.');
-    });
+    otpResend.addEventListener('click', sendOtp);
 
     document.querySelector('#auth-signout').addEventListener('click', async () => {
       await client.auth.signOut();
@@ -161,9 +148,7 @@
 
     const { data: currentSession } = await client.auth.getSession();
     if (currentSession.session?.user) {
-      const user = currentSession.session.user;
-      if (hasPasskeyAmr(currentSession.session.access_token)) await showApp(user);
-      else await enrolPasskey(user);
+      await showApp(currentSession.session.user);
     }
   }
 
