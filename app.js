@@ -551,19 +551,47 @@ function updateNinthCrewEstimate() {
 
 function renderDestinations() {
   clearInterval(destinationClockTimer);
-  const list = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name)).map(destination => {
-    return `<button class="destination" data-destination="${escapeHtml(destination.code)}"><strong>${escapeHtml(destination.name)}</strong><span>${escapeHtml(destination.code)}</span></button>`;
-  }).join('');
+  const countries = [...new Set(data.destinations.map(destination => destination.country))].sort((a, b) => a.localeCompare(b));
   content.innerHTML = heading('', sections.destinations.title, sections.destinations.desc)
-    + `<div class="destination-list">${list}</div>`;
-  content.querySelectorAll('[data-destination]').forEach(button => button.onclick = () => openDestination(button.dataset.destination));
+    + `<div class="destination-tools">
+      <label class="destination-search"><span>Find a destination</span><input id="destination-search" type="search" placeholder="City, country or airport code" autocomplete="off"></label>
+      <label class="destination-filter"><span>Country</span><select id="destination-country"><option value="">All countries</option>${countries.map(country => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join('')}</select></label>
+      <label class="destination-filter"><span>Route</span><select id="destination-route"><option value="">All routes</option><option value="year-round">Year-round</option><option value="seasonal">Seasonal</option></select></label>
+    </div><p class="destination-result-count" id="destination-result-count" aria-live="polite"></p><div class="destination-list" id="destination-list"></div>`;
+  const searchInput = content.querySelector('#destination-search');
+  const countryFilter = content.querySelector('#destination-country');
+  const routeFilter = content.querySelector('#destination-route');
+  const listElement = content.querySelector('#destination-list');
+  const countElement = content.querySelector('#destination-result-count');
+  const renderList = () => {
+    const query = searchInput.value.trim().toLocaleLowerCase();
+    const country = countryFilter.value;
+    const route = routeFilter.value;
+    const filtered = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name)).filter(destination => {
+      const matchesQuery = !query || [destination.name, destination.country, destination.code].some(value => value.toLocaleLowerCase().includes(query));
+      const matchesCountry = !country || destination.country === country;
+      const seasonal = destination.routeStatus.toLocaleLowerCase().includes('seasonal');
+      const matchesRoute = !route || (route === 'seasonal' ? seasonal : !seasonal);
+      return matchesQuery && matchesCountry && matchesRoute;
+    });
+    countElement.textContent = `${filtered.length} ${filtered.length === 1 ? 'destination' : 'destinations'}`;
+    listElement.innerHTML = filtered.length ? filtered.map(destination => {
+      const seasonal = destination.routeStatus.toLocaleLowerCase().includes('seasonal');
+      return `<button class="destination" data-destination="${escapeHtml(destination.code)}"><span class="destination-main"><strong>${escapeHtml(destination.name)}</strong><span class="destination-code">${escapeHtml(destination.code)}</span></span><span class="destination-details"><span>${escapeHtml(destination.country)}</span><span class="destination-route ${seasonal ? 'is-seasonal' : ''}">${escapeHtml(destination.routeStatus)}</span></span></button>`;
+    }).join('') : '<div class="destination-empty"><strong>No destinations found</strong><span>Try a different city, country, code or filter.</span></div>';
+    listElement.querySelectorAll('[data-destination]').forEach(button => button.onclick = () => openDestination(button.dataset.destination));
+  };
+  searchInput.addEventListener('input', renderList);
+  [countryFilter, routeFilter].forEach(control => control.addEventListener('change', renderList));
+  renderList();
 }
 
 function renderDestinationProfile(destination) {
   const facts = data.destinationFacts.map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
   const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT DESTINATION</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div><p class="destination-freshness">Source: destination source register · Checked ${escapeHtml(data.informationLastUpdated || 'date unknown')}. Record confidence: unknown unless the record itself states otherwise.</p>`;
+  const airportMap = renderDestinationMap(destination);
   if (!facts.length) {
-    return metadata + `<div class="empty"><strong>No destination details entered yet</strong>This location is present in the destination index, but the source register has no detailed records for it.</div>`;
+    return metadata + airportMap + `<div class="empty"><strong>No destination details entered yet</strong>This location is present in the destination index, but the source register has no detailed records for it.</div>`;
   }
   const grouped = new Map();
   facts.forEach(fact => {
@@ -586,9 +614,26 @@ function renderDestinationProfile(destination) {
       return `<div class="profile-record" id="destination-fact-${fact.searchIndex}"><div class="profile-record-heading"><strong>${escapeHtml(fact.field)}</strong></div>${value}${mapLink}</div>`;
     }).join('');
     const cardClass = category === 'Crew Transport' ? 'card profile-card crew-transport-card' : 'card profile-card';
-    return `<article class="${cardClass}"><span class="card-tag">${escapeHtml(category)}</span><div class="profile-fields">${records}</div></article>`;
+    const map = category === 'Airport & Arrival' ? airportMap : '';
+    return `<article class="${cardClass}"><span class="card-tag">${escapeHtml(category)}</span><div class="profile-fields">${records}</div>${map}</article>`;
   }).join('');
   return metadata + `<div class="card-grid profile-grid">${cards}</div>`;
+}
+
+function renderDestinationMap(destination) {
+  const coordinates = destinationAirportCoordinates[destination.code];
+  if (!coordinates) return '';
+  const [latitude, longitude] = coordinates;
+  const bounds = [longitude - 0.025, latitude - 0.016, longitude + 0.025, latitude + 0.016]
+    .map(value => value.toFixed(5)).join('%2C');
+  const marker = `${latitude.toFixed(5)}%2C${longitude.toFixed(5)}`;
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bounds}&layer=mapnik&marker=${marker}`;
+  const fullMapUrl = `https://www.openstreetmap.org/?mlat=${latitude.toFixed(5)}&mlon=${longitude.toFixed(5)}#map=14/${latitude.toFixed(5)}/${longitude.toFixed(5)}`;
+  return `<section class="destination-airport-map" aria-label="Map of ${escapeHtml(destination.name)} airport">
+    <div class="destination-map-heading"><span class="card-tag">AIRPORT LOCATION</span><a href="${fullMapUrl}" target="_blank" rel="noopener">Open larger map ↗</a></div>
+    <iframe title="Map showing ${escapeHtml(destination.name)} airport" src="${mapUrl}" loading="lazy" referrerpolicy="no-referrer" allowfullscreen></iframe>
+    <small>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></small>
+  </section>`;
 }
 
 function renderHotelAmenities(facts) {
