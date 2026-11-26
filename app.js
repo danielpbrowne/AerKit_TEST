@@ -588,7 +588,7 @@ function renderDestinations() {
 
 function renderDestinationProfile(destination) {
   const facts = data.destinationFacts.map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
-  const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT DESTINATION</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div>`;
+  const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT ${escapeHtml(destination.name.toUpperCase())}</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div>`;
   if (!facts.length) {
     return metadata + `<div class="empty"><strong>No destination details entered yet</strong>This location is present in the destination index, but the source register has no detailed records for it.</div>`;
   }
@@ -611,6 +611,7 @@ function renderDestinationProfile(destination) {
     .map(([category, categoryFacts]) => {
     if (category === 'Handling & Operations') return renderHandlingCard(categoryFacts);
     if (category === 'Turnaround Coordination') return renderTurnaroundCard(categoryFacts);
+    if (category === 'Crew Transport') return renderCrewTransportCard(categoryFacts);
     if (category === 'Hotel Amenities') return renderHotelAmenities(categoryFacts);
     const records = categoryFacts.map(fact => {
       const mapLink = destinationMapLink(fact, destination);
@@ -618,8 +619,7 @@ function renderDestinationProfile(destination) {
       const value = contact || `<div class="profile-value">${escapeHtml(fact.value || 'No value entered')}</div>`;
       return `<div class="profile-record" id="destination-fact-${fact.searchIndex}"><div class="profile-record-heading"><strong>${escapeHtml(fact.field)}</strong></div>${value}${mapLink}</div>`;
     }).join('');
-    const cardClass = category === 'Crew Transport' ? 'card profile-card crew-transport-card' : 'card profile-card';
-    return `<article class="${cardClass}"><span class="card-tag">${escapeHtml(category)}</span><div class="profile-fields">${records}</div></article>`;
+    return `<article class="card profile-card"><span class="card-tag">${escapeHtml(category)}</span><div class="profile-fields">${records}</div></article>`;
     }).join('');
   return metadata + `<div class="card-grid profile-grid">${cards}</div>`;
 }
@@ -727,6 +727,20 @@ function renderTurnaroundCard(facts) {
   const cards = contacts.map(contact => contactCard(contact.role, contact.name, contact.email, contact.phone)).join('');
   const extras = unassigned.map(fact => `<div class="contact-extra"><strong>${escapeHtml(fact.field)}</strong>${fact.field.toLowerCase().includes('phone') ? contactAction('CALL', fact.value, 'phone') : `<span>${escapeHtml(fact.value)}</span>`}</div>`).join('');
   return `<article class="card profile-card"><span class="card-tag">Turnaround Coordination</span><div class="coordination-grid">${cards}${extras}</div></article>`;
+}
+
+function renderCrewTransportCard(facts) {
+  const provider = facts.find(fact => fact.field === 'Transport Provider');
+  const email = facts.find(fact => fact.field === 'Transport Email')?.value;
+  const phone = facts.find(fact => fact.field === 'Transport Phone')?.value;
+  const consumed = new Set(['Transport Provider', 'Transport Email', 'Transport Phone']);
+  const providerCard = provider
+    ? contactCard('TRANSPORT PROVIDER', provider.value, email, phone)
+    : '';
+  const extraDetails = facts.filter(fact => !consumed.has(fact.field)).map(fact =>
+    `<div class="profile-record"><div class="profile-record-heading"><strong>${escapeHtml(fact.field)}</strong></div><div class="profile-value">${escapeHtml(fact.value || 'No value entered')}</div></div>`
+  ).join('');
+  return `<article class="card profile-card crew-transport-card"><span class="card-tag">Crew Transport</span><div class="profile-fields">${providerCard}${extraDetails}</div></article>`;
 }
 
 function updateDestinationClock(destination) {
