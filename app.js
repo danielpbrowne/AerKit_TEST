@@ -588,10 +588,9 @@ function renderDestinations() {
 
 function renderDestinationProfile(destination) {
   const facts = data.destinationFacts.map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
-  const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT DESTINATION</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div><p class="destination-freshness">Source: destination source register · Checked ${escapeHtml(data.informationLastUpdated || 'date unknown')}. Record confidence: unknown unless the record itself states otherwise.</p>`;
-  const airportMap = renderDestinationMap(destination);
+  const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT DESTINATION</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div>`;
   if (!facts.length) {
-    return metadata + airportMap + `<div class="empty"><strong>No destination details entered yet</strong>This location is present in the destination index, but the source register has no detailed records for it.</div>`;
+    return metadata + `<div class="empty"><strong>No destination details entered yet</strong>This location is present in the destination index, but the source register has no detailed records for it.</div>`;
   }
   const grouped = new Map();
   facts.forEach(fact => {
@@ -603,7 +602,13 @@ function renderDestinationProfile(destination) {
     if (!grouped.has(category)) grouped.set(category, []);
     grouped.get(category).push(fact);
   });
-  const cards = [...grouped.entries()].map(([category, categoryFacts]) => {
+  const categoryOrder = new Map([
+    'Airport & Arrival', 'Handling & Operations', 'Turnaround Coordination',
+    'Crew Transport', 'Hotel', 'Hotel Amenities'
+  ].map((category, index) => [category, index]));
+  const cards = [...grouped.entries()]
+    .sort(([a], [b]) => (categoryOrder.get(a) ?? categoryOrder.size) - (categoryOrder.get(b) ?? categoryOrder.size))
+    .map(([category, categoryFacts]) => {
     if (category === 'Handling & Operations') return renderHandlingCard(categoryFacts);
     if (category === 'Turnaround Coordination') return renderTurnaroundCard(categoryFacts);
     if (category === 'Hotel Amenities') return renderHotelAmenities(categoryFacts);
@@ -614,26 +619,9 @@ function renderDestinationProfile(destination) {
       return `<div class="profile-record" id="destination-fact-${fact.searchIndex}"><div class="profile-record-heading"><strong>${escapeHtml(fact.field)}</strong></div>${value}${mapLink}</div>`;
     }).join('');
     const cardClass = category === 'Crew Transport' ? 'card profile-card crew-transport-card' : 'card profile-card';
-    const map = category === 'Airport & Arrival' ? airportMap : '';
-    return `<article class="${cardClass}"><span class="card-tag">${escapeHtml(category)}</span><div class="profile-fields">${records}</div>${map}</article>`;
-  }).join('');
+    return `<article class="${cardClass}"><span class="card-tag">${escapeHtml(category)}</span><div class="profile-fields">${records}</div></article>`;
+    }).join('');
   return metadata + `<div class="card-grid profile-grid">${cards}</div>`;
-}
-
-function renderDestinationMap(destination) {
-  const coordinates = destinationAirportCoordinates[destination.code];
-  if (!coordinates) return '';
-  const [latitude, longitude] = coordinates;
-  const bounds = [longitude - 0.025, latitude - 0.016, longitude + 0.025, latitude + 0.016]
-    .map(value => value.toFixed(5)).join('%2C');
-  const marker = `${latitude.toFixed(5)}%2C${longitude.toFixed(5)}`;
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bounds}&layer=mapnik&marker=${marker}`;
-  const fullMapUrl = `https://www.openstreetmap.org/?mlat=${latitude.toFixed(5)}&mlon=${longitude.toFixed(5)}#map=14/${latitude.toFixed(5)}/${longitude.toFixed(5)}`;
-  return `<section class="destination-airport-map" aria-label="Map of ${escapeHtml(destination.name)} airport">
-    <div class="destination-map-heading"><span class="card-tag">AIRPORT LOCATION</span><a href="${fullMapUrl}" target="_blank" rel="noopener">Open larger map ↗</a></div>
-    <iframe title="Map showing ${escapeHtml(destination.name)} airport" src="${mapUrl}" loading="lazy" referrerpolicy="no-referrer" allowfullscreen></iframe>
-    <small>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></small>
-  </section>`;
 }
 
 function renderHotelAmenities(facts) {

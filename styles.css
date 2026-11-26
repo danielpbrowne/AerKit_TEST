@@ -116,13 +116,7 @@ main{max-width:1120px;margin:auto;padding:0 30px}
 .weather-attribution{margin-top:1px;color:#b8c8cc;font:10px/1.3 ui-monospace,SFMono-Regular,monospace}
 .weather-attribution a{color:inherit;text-underline-offset:2px}
 .profile-meta>div:nth-child(3){align-items:flex-start}
-.profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-.destination-airport-map{min-width:0;margin-top:16px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
-.destination-map-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.destination-map-heading .card-tag{color:#8b753c;font:11px ui-monospace,SFMono-Regular,monospace;letter-spacing:.08em}
-.destination-map-heading>a{color:var(--navy-deep);font:600 12px Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-decoration:underline;text-underline-offset:2px}
-.destination-airport-map iframe{display:block;width:100%;height:230px;border:0;border-radius:4px;background:#e8eeeb}
-.destination-airport-map>small{display:block;margin-top:6px;color:var(--muted);font:10px/1.3 ui-monospace,SFMono-Regular,monospace}.destination-airport-map>small a{color:inherit}
-@media(max-width:600px){.destination-airport-map{margin-top:13px;padding:8px}.destination-airport-map iframe{height:210px}}
+.profile-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 .amenity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
 .amenity-item{display:flex;min-width:0;min-height:48px;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid #e1e6e3;border-radius:5px;background:#fff}
 .amenity-item>strong{min-width:0;color:var(--navy-deep);font:600 14px/1.2 Outfit,Urbanist,sans-serif}
@@ -137,7 +131,7 @@ main{max-width:1120px;margin:auto;padding:0 30px}
 .amenity-status.is-request svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .amenity-value{color:var(--muted);font-size:13px;line-height:1.2;text-align:right;overflow-wrap:anywhere}
 .profile-fields{margin-top:8px}
-.coordination-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+.coordination-grid{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
 .contact-card,.contact-extra{min-width:0;background:#fff;border:1px solid #e1e6e3;border-radius:6px;padding:12px}
 .contact-role{display:block;font:11px ui-monospace,SFMono-Regular,monospace;letter-spacing:.07em;color:#8b753c}
 .contact-card h3{font:600 17px/1.2 Outfit,Urbanist,sans-serif;color:var(--navy-deep);margin:6px 0 10px;overflow-wrap:anywhere}
@@ -318,6 +312,6 @@ html[data-theme="dark"] footer{border-color:var(--line)}
 .ife-note.is-warning{border-left-color:var(--amber);background:#f7f3e4;color:#665624}
 @media(max-width:760px){.ife-reference-grid{grid-template-columns:1fr}}
 .pushback-time-field{min-width:0;width:100%}
-.essentials-card{display:block;width:100%;min-height:170px;text-align:left;cursor:pointer}.essentials-card:hover,.essentials-card:focus-visible{border-color:#9f8a4a;transform:translateY(-2px)}.essentials-card h3{margin:10px 0 6px;color:var(--navy-deep);font:600 20px Outfit,Urbanist,sans-serif}.essentials-card p{margin:0;color:var(--muted);font-size:15px;line-height:1.45}.essentials-open{display:block;margin-top:16px;color:#176b68;font-weight:700}.destination-freshness{margin:10px 0 16px;color:#68787b;font-size:13px;line-height:1.4}.flight-footer-actions{display:flex;gap:8px}.flight-footer-actions .clear-flight-button{width:auto}
+.essentials-card{display:block;width:100%;min-height:170px;text-align:left;cursor:pointer}.essentials-card:hover,.essentials-card:focus-visible{border-color:#9f8a4a;transform:translateY(-2px)}.essentials-card h3{margin:10px 0 6px;color:var(--navy-deep);font:600 20px Outfit,Urbanist,sans-serif}.essentials-card p{margin:0;color:var(--muted);font-size:15px;line-height:1.45}.essentials-open{display:block;margin-top:16px;color:#176b68;font-weight:700}.flight-footer-actions{display:flex;gap:8px}.flight-footer-actions .clear-flight-button{width:auto}
 
 .test-version-badge{display:inline-flex;align-items:center;margin-bottom:8px;padding:5px 9px;border:1px solid #e3c66d;border-radius:999px;background:#e3c66d;color:#142b3b;font:700 11px/1.15 ui-monospace,SFMono-Regular,monospace;letter-spacing:.1em}
