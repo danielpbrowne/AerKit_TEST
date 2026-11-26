@@ -780,7 +780,8 @@ function aircraftConfigurations() {
     if (!groups.has(key)) groups.set(key, { ...aircraft, registrations: [] });
     groups.get(key).registrations.push(aircraft.registration);
   });
-  return [...groups.values()].sort((a, b) => a.type.localeCompare(b.type) || a.cabinCrewSeats - b.cabinCrewSeats);
+  const typeOrder = type => type.startsWith('A321neo') ? 1 : 0;
+  return [...groups.values()].sort((a, b) => typeOrder(a.type) - typeOrder(b.type) || a.type.localeCompare(b.type) || a.cabinCrewSeats - b.cabinCrewSeats);
 }
 
 function aircraftId(aircraft) {
@@ -798,13 +799,12 @@ function renderAircraft() {
   const variants = aircraftConfigurations();
   const cards = variants.map(aircraft => {
     const zones = [['Business', aircraft.business], ['Premium Economy', aircraft.premiumEconomy], ['Economy', aircraft.economy]].filter(([, seats]) => seats > 0);
-    const nonBusinessSeats = zones.filter(([name]) => name !== 'Business').reduce((sum, [, seats]) => sum + seats, 0);
     const bar = zones.map(([name, seats]) => {
-      const visualShare = name === 'Business' ? 25 : (nonBusinessSeats ? 75 * seats / nonBusinessSeats : 75);
-      return `<div class="seat-zone${name === 'Business' ? ' seat-zone-business' : ''}" style="--zone:${visualShare.toFixed(2)}%"><strong>${seats}</strong></div>`;
+      const visualShare = aircraft.total ? seats / aircraft.total * 100 : 0;
+      return `<div class="seat-zone seat-zone-${name.toLowerCase().replace(/[^a-z]+/g, '-')}" style="--zone:${visualShare.toFixed(2)}%" title="${escapeHtml(name)}: ${seats} seats"></div>`;
     }).join('');
     const registrations = aircraft.registrations.map(registration => `<li>${escapeHtml(registration)}</li>`).join('');
-    return `<article class="card aircraft-card" id="${aircraftId(aircraft)}"><div class="aircraft-card-head"><span class="card-tag">${escapeHtml(aircraft.type)}</span><strong class="aircraft-total">${aircraft.total}<small> seats</small></strong></div><div class="seat-bar" aria-label="Approximate cabin class visual; exact seat counts are listed below">${bar}</div><div class="seat-legend">${zones.map(([name, seats]) => `<span>${escapeHtml(name)} <b>${seats}</b></span>`).join('')}</div><div class="aircraft-stats"><div><span>CABIN CREW SEATS</span><strong>${aircraft.cabinCrewSeats}</strong></div><div><span>FLIGHT DECK REST</span>${renderRestStatus(aircraft.flightDeckRest)}</div><div><span>CABIN CREW REST</span>${renderRestStatus(aircraft.cabinCrewRest)}</div></div><details class="registration-list"><summary>Registrations</summary><ul>${registrations}</ul><div class="registration-total"><span>Total in Fleet</span><strong>${aircraft.registrations.length} aircraft</strong></div></details></article>`;
+    return `<article class="card aircraft-card" id="${aircraftId(aircraft)}"><div class="aircraft-card-head"><div class="aircraft-title"><span class="aircraft-kicker">AIRCRAFT TYPE</span><h3>${escapeHtml(aircraft.type)}</h3></div><div class="aircraft-total"><strong>${aircraft.total}</strong><span>passenger seats</span></div></div><section class="aircraft-cabins" aria-label="Passenger seats by cabin"><div class="seat-bar" role="img" aria-label="Seat distribution: ${zones.map(([name, seats]) => `${name} ${seats}`).join(', ')}">${bar}</div><div class="seat-legend">${zones.map(([name, seats]) => `<div class="seat-legend-item"><span class="seat-swatch seat-swatch-${name.toLowerCase().replace(/[^a-z]+/g, '-')}"></span><span>${escapeHtml(name)}</span><strong>${seats}</strong></div>`).join('')}</div></section><div class="aircraft-stats"><div><span>CABIN CREW SEATS</span><strong>${aircraft.cabinCrewSeats}</strong></div><div><span>FLIGHT DECK REST</span>${renderRestStatus(aircraft.flightDeckRest)}</div><div><span>CABIN CREW REST</span>${renderRestStatus(aircraft.cabinCrewRest)}</div></div><details class="registration-list"><summary><span>Registrations</span><span class="registration-count">${aircraft.registrations.length} aircraft</span></summary><ul>${registrations}</ul></details></article>`;
   }).join('');
   content.innerHTML = heading('', sections.aircraft.title, sections.aircraft.desc)
     + `<div class="card-grid aircraft-grid">${cards}</div>`;
