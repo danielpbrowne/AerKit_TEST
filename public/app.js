@@ -1,11 +1,12 @@
 const data = window.CSM_DATA;
+const FEEDBACK_FORMSPREE_ID = 'mwloreqe';
 const sections = {
   essentials: { title: 'Quick Access', desc: 'Quick access to the most frequently visited tools.' },
-  destinations: { title: 'Where We Fly', desc: 'Pick your destination to view Airport, Hotel & Transport Information.' },
-  aircraft: { title: 'Aircraft Type', desc: 'Aircraft Seating Capacity and Registrations' },
-  flightInfo: { title: 'Flight Plan', desc: '' },
+  destinations: { title: 'Destination Guide', desc: 'Select your destination from the list below to find Airport, Hotel & Transport Information' },
+  aircraft: { title: 'Aircraft Types', desc: 'Aircraft Seating Capacity and Registrations' },
+  flightInfo: { title: 'Flight Information', desc: '' },
   flight: {
-    title: 'Flight & Duty References', desc: '',
+    title: 'Flight & Duty', desc: 'Flight & Duty Information',
     cards: [
       ['BASIC', 'Basic Maximum Daily FDP', 'Basic Maximum FDP is calculated from each crew member’s report time. It is then reduced according to the number of sectors operated as per the table.'],
       ['ACCLIMATISATION', 'Acclimatisation Checker', 'Check the acclimatisation state for a crew member leaving Dublin.'],
@@ -55,7 +56,7 @@ const sections = {
     ]
   },
   crew: {
-    title: 'Payments & Allowances', desc: '',
+    title: 'Credits & Payments', desc: '',
     cards: [
       ['CREDITS', 'Credits & payment dates', 'Select a pay period to view its payroll and credit dates.'],
       ['COMMISSION', 'Commission', 'Current commission policy, calculation and payroll timing.'],
@@ -102,7 +103,7 @@ const destinationTimeZones = {
 };
 
 const destinationAirportCoordinates = {
-  DUB: [53.4264, -6.2499],
+  DUB: [53.4213, -6.2701],
   BOS: [42.3656, -71.0096], CUN: [21.0365, -86.8771], ORD: [41.9742, -87.9073], CLE: [41.4117, -81.8498],
   BDL: [41.9389, -72.6832], IND: [39.7173, -86.2944], LAX: [33.9416, -118.4085], MIA: [25.7959, -80.287],
   BNA: [36.1263, -86.6774], JFK: [40.6413, -73.7781], EWR: [40.6895, -74.1745], MCO: [28.4312, -81.3081],
@@ -140,6 +141,10 @@ function heading(kicker, title, description) {
   return `<div class="section-head"><div>${kicker ? `<span class="section-kicker">${escapeHtml(kicker)}</span>` : ''}<h2>${escapeHtml(title)}</h2></div>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div>`;
 }
 
+function caution(text) {
+  return `<div class="notice">${escapeHtml(text)}</div>`;
+}
+
 function renderUsefulContacts() {
   const renderGroup = (title, entries) => `<section class="useful-link-card"><h3>${escapeHtml(title)}</h3><div class="useful-link-list">${entries.map(entry => `<a class="useful-resource-link" href="${escapeHtml(entry.url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(entry.title)}</span><b aria-hidden="true">↗</b></a>`).join('')}</div></section>`;
   const contacts = (data.usefulContacts || []).map(contact => {
@@ -160,11 +165,11 @@ function renderFeedbackPage() {
     + `<article class="card feedback-card">
       <p>Choose what your feedback relates to, then describe the information that should be added or corrected.</p>
       <form id="feedback-form" class="feedback-form">
-        <label class="flight-field"><span>Feedback type</span><select id="feedback-category" required><option value="">Select a category</option><option>Airport Information</option><option>Outstation Contact Information</option><option>Hotel Information</option><option>Other</option><option>App Idea Suggestions</option></select></label>
-        <label class="flight-field" id="feedback-destination-wrap" hidden><span>Destination</span><select id="feedback-destination"><option value="">Select destination</option>${destinationOptions}</select></label>
-        <label class="flight-field feedback-detail-field"><span id="feedback-detail-label">Suggested Correction</span><textarea id="feedback-detail" rows="4" required placeholder="Describe the suggested correction"></textarea></label>
-        <label class="flight-field feedback-context-field"><span>Source or evidence (optional)</span><textarea id="feedback-context" rows="3" placeholder="Add a document name, link, date checked, or other evidence"></textarea></label>
-        <div class="feedback-actions"><button class="feedback-submit" type="submit">Save Feedback</button><button class="feedback-copy" type="button" id="feedback-copy" hidden>Copy report</button></div>
+        <label class="flight-field"><span>Feedback type</span><select id="feedback-category" name="category" required><option value="">Select a category</option><option>Airport Information</option><option>Outstation Contact Information</option><option>Hotel Information</option><option>Other</option><option>App Idea Suggestions</option></select></label>
+        <label class="flight-field" id="feedback-destination-wrap" hidden><span>Destination</span><select id="feedback-destination" name="destination"><option value="">Select destination</option>${destinationOptions}</select></label>
+        <label class="flight-field feedback-detail-field"><span id="feedback-detail-label">Suggested Correction</span><textarea id="feedback-detail" name="details" rows="4" required placeholder="Describe the suggested correction"></textarea></label>
+        <label class="flight-field feedback-context-field"><span>Source or evidence (optional)</span><textarea id="feedback-context" name="source_or_evidence" rows="3" placeholder="Add a document name, link, date checked, or other evidence"></textarea></label>
+        <div class="feedback-actions"><button class="feedback-submit" type="submit">Submit Feedback</button><button class="feedback-copy" type="button" id="feedback-copy" hidden>Copy report</button></div>
         <p id="feedback-status" class="feedback-status" role="status" aria-live="polite"></p>
       </form>
     </article>`;
@@ -180,6 +185,7 @@ function initFeedbackPage() {
   const detail = form.querySelector('#feedback-detail');
   const status = form.querySelector('#feedback-status');
   const copyButton = form.querySelector('#feedback-copy');
+  const submitButton = form.querySelector('.feedback-submit');
   let savedReport = '';
   const updateFields = () => {
     const selected = category.value;
@@ -193,8 +199,12 @@ function initFeedbackPage() {
   };
   category.addEventListener('change', updateFields);
   form.addEventListener('reset', () => setTimeout(updateFields));
-  form.addEventListener('submit', event => {
+  form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (window.AERKIT_PREVIEW_MODE) {
+      status.textContent = 'Preview mode: feedback was not submitted.';
+      return;
+    }
     const selected = category.value;
     const destinationName = !destinationWrap.hidden && destination.value ? destination.options[destination.selectedIndex].textContent : '';
     const extra = form.querySelector('#feedback-context').value.trim();
@@ -206,9 +216,27 @@ function initFeedbackPage() {
       ...(extra ? [`Source or evidence: ${extra}`] : [])
     ];
     savedReport = lines.join('\n\n');
-    try { localStorage.setItem('aerkit-feedback-draft', savedReport); } catch {}
-    status.textContent = 'Feedback saved on this device. Copy the report if you want to share it.';
-    copyButton.hidden = false;
+    const payload = new FormData(form);
+    payload.set('message', savedReport);
+    payload.set('_subject', `AerKit feedback: ${selected}`);
+    submitButton.disabled = true;
+    status.textContent = 'Submitting feedback…';
+    try {
+      const response = await fetch(`https://formspree.io/f/${FEEDBACK_FORMSPREE_ID}`, {
+        method: 'POST',
+        body: payload,
+        headers: { Accept: 'application/json' }
+      });
+      if (!response.ok) throw new Error('Form submission failed');
+      status.textContent = 'Thank you. Your feedback has been submitted.';
+      copyButton.hidden = true;
+      form.reset();
+    } catch {
+      status.textContent = 'We could not submit your feedback. Please try again later or copy the report to keep it.';
+      copyButton.hidden = false;
+    } finally {
+      submitButton.disabled = false;
+    }
   });
   copyButton.addEventListener('click', async () => {
     try {
@@ -221,8 +249,8 @@ function initFeedbackPage() {
   updateFields();
 }
 
-function renderCards(cards, gridClass = '') {
-  return `<div class="card-grid${gridClass ? ` ${gridClass}` : ''}">${cards.map(card => {
+function renderCards(cards) {
+  return `<div class="card-grid">${cards.map(card => {
     if (card[0] === 'BASIC') return renderBasicFdpCard(card);
     if (card[0] === 'ACCLIMATISATION') return renderAcclimatisationCard(card);
     if (card[0] === 'NINTH CREW MEMBER') return renderNinthCrewCard(card);
@@ -230,6 +258,7 @@ function renderCards(cards, gridClass = '') {
     if (card[0] === 'BID WINDOWS') return renderBidWindowsCard();
     if (card[0] === 'CREDITS') return renderCreditDatesCard();
     if (card[0] === 'EXPENSES') return renderOvernightAllowancesCard();
+    return `<article class="card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3><p>${escapeHtml(card[2])}</p></article>`;
   }).join('')}</div>`;
 }
 
@@ -393,19 +422,83 @@ function renderBasicFdpCard(card) {
   const reportOptions = basicFdpRows.map(([reportTime], index) => `<option value="${index}">${reportTime}</option>`).join('');
   return `<article class="card fdp-card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3>
     <p>Pick your report-time band, then the number of sectors to be operated. This will calculate your <strong>basic</strong> maximum FDP allowable under EASA FTL's.</p>
+    <p class="fdp-acclim-prompt">Check Acclimatisation state below if you are starting your Duty away from your Home Base after 48hrs from your starting report time.</p>
     <form class="acclim-checker" id="basic-fdp-checker">
       <label class="acclim-field"><span>Report time (reference time)</span><select name="reportTime" required><option value="">Select report-time band</option>${reportOptions}</select></label>
       <label class="acclim-field"><span>Sectors operated</span><select name="sectors" required><option value="">Select sectors</option><option value="1">1–2 sectors</option><option value="2">3 sectors</option><option value="3">4 sectors</option></select></label>
+      <label class="acclim-field inflight-rest-question"><span>Will this duty use an FDP extension with in-flight rest?</span><select name="inflightRest" required><option value="">Select yes or no</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+      <div class="inflight-rest-details" hidden>
+        <label class="acclim-field"><span>In-flight rest facility class</span><select name="restClass"><option value="">Select rest class</option><option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option></select></label>
+        <label class="acclim-field"><span>Additional flight crew</span><select name="additionalCrew"><option value="">Select additional crew</option><option value="1">1 additional flight crew member</option><option value="2">2 additional flight crew members</option></select></label>
+        <p class="inflight-rest-facility-note"><strong>Class 1:</strong> a bunk or near-flat bed in a separate crew rest area.</p>
+        <p class="inflight-rest-facility-note"><strong>Class 2:</strong> a seat reclining at least 45°, with at least 55 inches of pitch, 20 inches of width, leg and foot support, and separation from passengers.</p>
+        <p class="inflight-rest-facility-note"><strong>Class 3:</strong> a seat reclining at least 40°, with leg and foot support, separation from passengers, and no passenger in an adjacent seat.</p>
+        <label class="acclim-field inflight-rest-long-sector" hidden><span>Does the duty include one sector over 9 hours of continuous flight time?</span><select name="longSector"><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <p class="inflight-rest-unavailable" hidden>EASA allows in-flight-rest FDP extensions for no more than 3 sectors.</p>
+        <p class="inflight-rest-guidance">A qualifying sector over 9 hours may add 1 hour when there are no more than 2 sectors. In-flight rest counts as FDP. Every crew member must receive the required rest; the flight crew member at the controls during landing needs 2 consecutive hours. The minimum rest at destination is the preceding duty period or 14 hours, whichever is greater. This extension cannot be combined with an extension without in-flight rest or split duty. Confirm the route and rest allocation against your operator’s approved FTL scheme (ORO.FTL.205(e) and CS FTL.1.205(c)).</p>
+      </div>
       <div class="acclim-actions"><button class="acclim-calculate" type="submit">Check maximum FDP</button><button class="acclim-reset" type="reset">Reset</button></div>
       <div class="acclim-result fdp-basic-result" id="basic-fdp-result" role="status" aria-live="polite" hidden></div>
     </form>
-    <p class="acclim-note">This is a basic FDP estimate. There are other factors which can affect your Maximum FDP, including; Acclimatisation State, Extension due to In-Flight Rest etc.<br>Ensure all collective agreements are followed and applied where necessary</p>
+    <p class="acclim-note">This is a basic FDP estimate. Ensure all collective agreements are also followed and applied where necessary.</p>
   </article>`;
 }
 
 function renderAcclimatisationCard(card) {
   return `<article class="card fdp-card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3><p>If you report for duty in Ireland, you are assumed to be acclimatised to Home Base time. Your acclimatisation state at your next outstation report depends on the time elapsed since your Home Base report and the time difference at the outstation.</p><form class="acclim-checker" id="acclim-checker"><label class="acclim-field"><span>Time Difference between Home Base &amp; Next Report Location</span><select name="difference" required><option value="">Select time difference</option><option value="0">Less than 4 hours</option><option value="1">4 to 6 hours</option><option value="2">More than 6 to 9 hours</option><option value="3">More than 9 to 12 hours</option></select></label><label class="acclim-field"><span>Time from Home Base Report until next report time</span><select name="elapsed" required><option value="">Select elapsed time</option><option value="0">Less than 48 hours</option><option value="1">48 to 71 hours 59 minutes</option><option value="2">72 to 95 hours 59 minutes</option><option value="3">96 to 119 hours 59 minutes</option><option value="4">120 hours or more</option></select></label><div class="acclim-actions"><button class="acclim-calculate" type="submit">Check acclimatisation</button><button class="acclim-reset" type="reset">Reset</button></div><div class="acclim-result" id="acclim-result" role="status" aria-live="polite" hidden></div></form><p class="acclim-note">This checker uses the information from EASA ORO.FTL.105 Definitions.</p></article>`;
 }
+
+function formatFdpMinutes(minutes) {
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function parseFdpMinutes(value) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function minimumCabinCrewRest(maximumFdpMinutes, restClass) {
+  const rows = [
+    [870, [90, 90, 90]],
+    [900, [105, 120, 140]],
+    [930, [120, 140, 160]],
+    [960, [135, 160, 180]],
+    [990, [155, 180, null]],
+    [1020, [180, 205, null]],
+    [1050, [205, null, null]],
+    [1080, [230, null, null]]
+  ];
+  const row = rows.find(([limit]) => maximumFdpMinutes <= limit);
+  return row ? row[1][restClass - 1] : null;
+}
+
+function updateBasicFdpRestFields(form) {
+  const enabled = form.elements.inflightRest.value === 'yes';
+  const sectors = form.elements.sectors.value;
+  const eligibleSectorCount = sectors !== '3';
+  const details = form.querySelector('.inflight-rest-details');
+  const unavailable = form.querySelector('.inflight-rest-unavailable');
+  const longSectorField = form.querySelector('.inflight-rest-long-sector');
+  const restClass = form.elements.restClass;
+  const additionalCrew = form.elements.additionalCrew;
+  const longSector = form.elements.longSector;
+
+  details.hidden = !enabled;
+  unavailable.hidden = !enabled || eligibleSectorCount;
+  longSectorField.hidden = !enabled || sectors !== '1';
+  restClass.required = enabled && eligibleSectorCount;
+  additionalCrew.required = enabled && eligibleSectorCount;
+  longSector.required = enabled && sectors === '1';
+}
+
+content.addEventListener('change', event => {
+  const form = event.target.closest('#basic-fdp-checker');
+  if (!form) return;
+  updateBasicFdpRestFields(form);
+  const result = form.querySelector('#basic-fdp-result');
+  result.hidden = true;
+  result.innerHTML = '';
+});
 
 content.addEventListener('submit', event => {
   if (event.target.id === 'basic-fdp-checker') {
@@ -415,8 +508,34 @@ content.addEventListener('submit', event => {
     const result = event.target.querySelector('#basic-fdp-result');
     const form = event.target;
     if (reportTime === '' || sectors === '') return;
-    const maximumBasicFdp = basicFdpRows[Number(reportTime)][Number(sectors)];
-    result.innerHTML = `<div class="acclim-result-copy"><strong>Maximum Basic FDP</strong><p class="fdp-basic-result-time">${escapeHtml(maximumBasicFdp)}</p><p>Based on report-time band ${escapeHtml(form.elements.reportTime.selectedOptions[0].textContent)} and ${escapeHtml(form.elements.sectors.selectedOptions[0].textContent)}. Reference time zone follows the crew member’s acclimatisation state.</p></div>`;
+    const maximumBasicMinutes = parseFdpMinutes(basicFdpRows[Number(reportTime)][Number(sectors)]);
+    const usesInflightRest = form.elements.inflightRest.value === 'yes';
+
+    if (usesInflightRest && sectors === '3') {
+      result.innerHTML = '<div class="acclim-result-copy"><strong>In-flight rest extension unavailable</strong><p>EASA limits this extension to a maximum of 3 sectors. Select 1–2 or 3 sectors to calculate it.</p></div>';
+      result.hidden = false;
+      return;
+    }
+
+    if (usesInflightRest) {
+      const restClass = Number(form.elements.restClass.value);
+      const additionalCrew = Number(form.elements.additionalCrew.value);
+      const qualifiesForExtraHour = sectors === '1' && form.elements.longSector.value === 'yes';
+      const baseCapByCrew = {
+        1: { 1: 960, 2: 900, 3: 840 },
+        2: { 1: 1020, 2: 960, 3: 900 }
+      };
+      const maximumExtendedMinutes = baseCapByCrew[additionalCrew][restClass] + (qualifiesForExtraHour ? 60 : 0);
+      const requiredCabinCrewRest = minimumCabinCrewRest(maximumExtendedMinutes, restClass);
+      const increaseMinutes = maximumExtendedMinutes - maximumBasicMinutes;
+      const longSectorNote = qualifiesForExtraHour ? ' The qualifying long sector adds 1 hour to the limit.' : '';
+      const basicComparison = increaseMinutes > 0 ? `This is up to ${formatFdpMinutes(increaseMinutes)} above your basic maximum of ${formatFdpMinutes(maximumBasicMinutes)}.` : `Your basic maximum is ${formatFdpMinutes(maximumBasicMinutes)}.`;
+      result.innerHTML = `<div class="acclim-result-copy"><strong>Maximum FDP with in-flight rest</strong><p class="fdp-basic-result-time">${formatFdpMinutes(maximumExtendedMinutes)}</p><p>Minimum in-flight rest for each cabin crew member, for an FDP up to this limit: <strong>${formatFdpMinutes(requiredCabinCrewRest)}</strong>.</p><p>${basicComparison}${longSectorNote} In-flight rest counts as FDP.</p><p>Based on Class ${restClass} facilities and ${additionalCrew} additional flight crew member${additionalCrew === 1 ? '' : 's'}.</p></div>`;
+      result.hidden = false;
+      return;
+    }
+
+    result.innerHTML = `<div class="acclim-result-copy"><strong>Maximum Basic FDP</strong><p class="fdp-basic-result-time">${formatFdpMinutes(maximumBasicMinutes)}</p><p>Based on report-time band ${escapeHtml(form.elements.reportTime.selectedOptions[0].textContent)} and ${escapeHtml(form.elements.sectors.selectedOptions[0].textContent)}. Reference time zone follows the crew member’s acclimatisation state.</p></div>`;
     result.hidden = false;
     return;
   }
@@ -446,6 +565,14 @@ content.addEventListener('reset', event => {
   result.hidden = true;
   delete result.dataset.state;
   result.textContent = '';
+  if (event.target.id === 'basic-fdp-checker') {
+    event.target.querySelector('.inflight-rest-details').hidden = true;
+    event.target.elements.restClass.required = false;
+    event.target.elements.additionalCrew.required = false;
+    event.target.elements.longSector.required = false;
+    event.target.querySelector('.inflight-rest-unavailable').hidden = true;
+    event.target.querySelector('.inflight-rest-long-sector').hidden = true;
+  }
 });
 content.addEventListener('input', event => {
   if (['ninth-report-time', 'ninth-pushback-time', 'ninth-flight-hours', 'ninth-flight-minutes', 'ninth-extra-info'].includes(event.target.id)) updateNinthCrewEstimate();
@@ -476,7 +603,7 @@ content.addEventListener('change', event => {
 function renderNinthCrewCard(card) {
   const destinationOptions = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name)).map(destination => `<option value="${escapeHtml(destination.code)}">${escapeHtml(destination.name)} (${escapeHtml(destination.code)})</option>`).join("");
   const flightOptions = data.flightSchedule.map((flight, index) => `<option value="${index}">${escapeHtml(flight.flightNumber)}</option>`).join('');
-  return `<article class="card fdp-card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3><p>The 9th Crew Member Protocol applies to transatlantic flights when it becomes apparent that the FDP will exceed 13 hours.</p><div class="protocol-steps"><section><h4><span class="protocol-step-number" aria-hidden="true">1</span>Starting the Process</h4><p>When this is known, the CSM / No. 1 should liaise with the on-duty Operations Crew Manager (OCM) and Crew Control to advise them that a 9th Crew Member is required.</p></section><section><h4><span class="protocol-step-number" aria-hidden="true">2</span>Required Information</h4><p>When contacting the OCM and Crew Control, provide all relevant information available, such as:</p><ul class="protocol-info-list"><li>Nature of the delay</li><li>Expected duration of the delay</li><li>Planned flight time</li><li>Planned taxi time for departure and arrival</li><li>Any other relevant information</li></ul></section><section><h4><span class="protocol-step-number" aria-hidden="true">3</span>If a 9th Crew Member is provided</h4><p>The ninth crew member is surplus to the operating crew and should be used to support in-flight rest. Duty and rest should remain balanced among the operating cabin crew.</p></section><section><h4><span class="protocol-step-number" aria-hidden="true">4</span>If a 9th Crew Member is <em>NOT</em> Provided</h4><p>The CSM should inform the remaining operating crew and explain why a 9th Crew Member may not be available. If none is available, each operating crew member will receive the applicable approved short-crew credit shown below.</p></section></div><div class="protocol-credits"><h4>Short-Crew Credits</h4><table class="fdp-table protocol-credit-table"><thead><tr><th scope="col">Situation in the protocol</th><th scope="col">Credits per crew member</th></tr></thead><tbody><tr><th scope="row">Known delay: FDP exceeds 13 hours and no 9th Crew Member is provided when requested</th><td>28</td></tr><tr><th scope="row">Unknown delay: maximum FDP exceeds 13 h 15 min</th><td>28</td></tr><tr><th scope="row">Unknown delay: maximum FDP is less than 13 h 15 min</th><td>10</td></tr></tbody></table></div><section class="ninth-estimator" aria-labelledby="ninth-estimator-title"><span class="card-tag">ESTIMATE</span><h4 id="ninth-estimator-title">9th Crew Member Estimator</h4><p>Estimate overall duty time from crew report through estimated pushback, flight and arrival taxi.</p><div class="ninth-flight-route-fields"><label class="acclim-field"><span>Flight Number</span><select id="ninth-flight-number" aria-label="Flight Number"><option value="">Select flight number</option>${flightOptions}</select></label><label class="acclim-field"><span>Destination</span><select id="ninth-destination"><option value="">Select destination</option>${destinationOptions}</select></label></div><div class="ninth-estimator-fields"><label class="acclim-field"><span>Crew report time</span><input id="ninth-report-time" type="time" aria-label="Crew report time"></label><label class="acclim-field"><span>Estimated pushback time</span><input id="ninth-pushback-time" type="time" aria-label="Estimated pushback time"></label><fieldset class="flight-field ninth-flight-time"><legend>Flight time</legend><div><label><input id="ninth-flight-hours" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="0" aria-label="Flight time hours"><small>hours</small></label><b>:</b><label><input id="ninth-flight-minutes" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="00" aria-label="Flight time minutes"><small>minutes</small></label></div></fieldset></div><label class="acclim-field ninth-extra-field"><span>Additional information (optional)</span><textarea id="ninth-extra-info" rows="3" placeholder="Add details to include in the request"></textarea></label><p class="ninth-estimator-assumption">This estimator includes an average 15-minute taxi time for departure and arrival. It is not a Maximum FDP calculator.</p><div id="ninth-estimator-result" class="ninth-estimator-result" role="status" aria-live="polite" hidden></div><button class="ninth-reset-button" id="ninth-reset-calculator" type="button">Reset Calculator</button></section><small class="fdp-source-note">Protocol dated 14 December 2018 · addendum dated 12 September 2019.</small></article>`;
+  return `<article class="card fdp-card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3><p>The 9th Crew Member Protocol applies to transatlantic flights when it becomes apparent that the FDP will exceed 13 hours.</p><div class="protocol-steps"><section><h4>Starting the Process</h4><p>When this is known, the CSM / No. 1 should liaise with the on-duty Operations Crew Manager (OCM) and Crew Control to advise them that a 9th Crew Member is required.</p></section><section><h4>Required Information</h4><p>When contacting the OCM and Crew Control, provide all relevant information available, such as:</p><ul class="protocol-info-list"><li>Nature of the delay</li><li>Expected duration of the delay</li><li>Planned flight time</li><li>Planned taxi time for departure and arrival</li><li>Any other relevant information</li></ul></section><section><h4>When the ninth is provided</h4><p>The ninth crew member is surplus to the operating crew and should be used to support in-flight rest. Duty and rest should remain balanced among the operating cabin crew.</p></section><section><h4>If a 9th Crew Member is <em>NOT</em> Provided</h4><p>The CSM should inform the remaining operating crew and explain why a 9th Crew Member may not be available. If none is available, each operating crew member will receive the applicable approved short-crew credit shown below.</p></section></div><div class="protocol-credits"><h4>Short-Crew Credits</h4><table class="fdp-table protocol-credit-table"><thead><tr><th scope="col">Situation in the protocol</th><th scope="col">Credits per crew member</th></tr></thead><tbody><tr><th scope="row">Known delay: FDP exceeds 13 hours and no 9th Crew Member is provided when requested</th><td>28</td></tr><tr><th scope="row">Unknown delay: maximum FDP exceeds 13 h 15 min</th><td>28</td></tr><tr><th scope="row">Unknown delay: maximum FDP is less than 13 h 15 min</th><td>10</td></tr></tbody></table></div><section class="ninth-estimator" aria-labelledby="ninth-estimator-title"><span class="card-tag">ESTIMATE</span><h4 id="ninth-estimator-title">9th Crew Member Estimator</h4><p>Estimate overall duty time from crew report through estimated pushback, flight and arrival taxi.</p><div class="ninth-flight-route-fields"><label class="acclim-field"><span>Flight Number</span><select id="ninth-flight-number" aria-label="Flight Number"><option value="">Select flight number</option>${flightOptions}</select></label><label class="acclim-field"><span>Destination</span><select id="ninth-destination"><option value="">Select destination</option>${destinationOptions}</select></label></div><div class="ninth-estimator-fields"><label class="acclim-field"><span>Crew report time</span><input id="ninth-report-time" type="time" aria-label="Crew report time"></label><label class="acclim-field"><span>Estimated pushback time</span><input id="ninth-pushback-time" type="time" aria-label="Estimated pushback time"></label><fieldset class="flight-field ninth-flight-time"><legend>Flight time</legend><div><label><input id="ninth-flight-hours" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="0" aria-label="Flight time hours"><small>hours</small></label><b>:</b><label><input id="ninth-flight-minutes" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="00" aria-label="Flight time minutes"><small>minutes</small></label></div></fieldset></div><label class="acclim-field ninth-extra-field"><span>Additional information (optional)</span><textarea id="ninth-extra-info" rows="3" placeholder="Add details to include in the request"></textarea></label><p class="ninth-estimator-assumption">This estimator includes an average 15-minute taxi time for departure and arrival. It is not a Maximum FDP calculator.</p><div id="ninth-estimator-result" class="ninth-estimator-result" role="status" aria-live="polite" hidden></div><button class="ninth-reset-button" id="ninth-reset-calculator" type="button">Reset Calculator</button></section><small class="fdp-source-note">Protocol dated 14 December 2018 · addendum dated 12 September 2019.</small></article>`;
 }
 
 function updateNinthCrewEstimate() {
@@ -726,21 +853,20 @@ function weatherDescription(code) {
 
 async function updateDestinationWeather(destination) {
   const output = document.querySelector('#destination-weather');
-  const coordinates = destinationAirportCoordinates[destination.code];
-  if (!output || !coordinates) {
-    if (output) output.textContent = 'Unavailable';
-    return;
-  }
-  if (navigator.onLine === false) {
-    output.textContent = 'Weather unavailable offline';
-    return;
-  }
-  const cached = destinationWeatherCache.get(destination.code);
-  if (cached && Date.now() - cached.time < 20 * 60 * 1000) {
-    output.innerHTML = cached.html;
-    return;
-  }
+  if (!output) return;
   output.textContent = 'Loading weather…';
+  const weather = await getDestinationWeather(destination);
+  if (document.querySelector('#destination-weather') !== output) return;
+  if (weather.html) output.innerHTML = weather.html;
+  else output.textContent = weather.text;
+}
+
+async function getDestinationWeather(destination) {
+  const coordinates = destinationAirportCoordinates[destination.code];
+  if (!coordinates) return { text: 'Weather unavailable for this destination' };
+  const cached = destinationWeatherCache.get(destination.code);
+  if (cached && Date.now() - cached.time < 20 * 60 * 1000) return cached;
+  if (navigator.onLine === false) return { text: 'Weather unavailable offline' };
   try {
     const [latitude, longitude] = coordinates;
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto`;
@@ -752,10 +878,11 @@ async function updateDestinationWeather(destination) {
     if (!Number.isFinite(temperature) || !Number.isFinite(code)) throw new Error('Weather data unavailable');
     const [icon, description] = weatherDescription(code);
     const html = `<span class="weather-icon" aria-hidden="true">${icon}</span> <span class="weather-temperature">${Math.round(temperature)}°C</span><span class="weather-description">${escapeHtml(description)}</span>`;
-    destinationWeatherCache.set(destination.code, { time: Date.now(), html });
-    if (document.querySelector('#destination-weather') === output) output.innerHTML = html;
+    const weather = { time: Date.now(), html, text: `${icon} ${Math.round(temperature)}°C · ${description}` };
+    destinationWeatherCache.set(destination.code, weather);
+    return weather;
   } catch {
-    if (document.querySelector('#destination-weather') === output) output.textContent = navigator.onLine === false ? 'Weather unavailable offline' : 'Weather unavailable';
+    return { text: navigator.onLine === false ? 'Weather unavailable offline' : 'Weather unavailable' };
   }
 }
 
@@ -818,7 +945,7 @@ function renderFlightInformation() {
     .map(airport => `<option value="${escapeHtml(airport.code)}">${escapeHtml(airport.name)} (${escapeHtml(airport.code)})</option>`).join('');
   content.innerHTML = heading('', sections.flightInfo.title, sections.flightInfo.desc)
     + `<form class="flight-form" id="flight-information-form" autocomplete="off">
-      <section class="flight-panel flight-route-panel"><div class="flight-panel-head"><h3>Where to today?</h3></div>
+      <section class="flight-panel flight-route-panel"><div class="flight-panel-head"><h3>Where are you going?</h3></div>
         <div class="flight-fields flight-route-fields">
           <label class="flight-field"><span>Departure</span><select name="originAirport" id="origin-airport"><option value="">Select</option>${departureAirportOptions}</select></label>
           <label class="flight-field"><span>Arrival</span><select name="destination"><option value="">Select</option>${arrivalAirportOptions}</select></label>
@@ -839,7 +966,7 @@ function renderFlightInformation() {
         </section>
         <section class="flight-panel"><div class="flight-panel-head"><h3>Flight Times</h3></div>
           <div class="flight-fields">
-            <div class="flight-pushback-row"><div class="flight-field pushback-time-field"><label for="pushback-time">Pushback time</label><input id="pushback-time" name="pushback" type="datetime-local" aria-describedby="pushback-time-zone"><small id="pushback-time-zone" role="status" aria-live="polite">Select a departure airport to set the time zone.</small></div><button class="current-time-button" type="button" id="use-current-pushback-time">Now</button></div>
+            <div class="flight-pushback-row"><div class="flight-field pushback-time-field"><label for="pushback-time">Pushback time</label><input id="pushback-time" name="pushback" type="datetime-local" aria-describedby="pushback-time-zone"><small id="pushback-time-zone" role="status" aria-live="polite">Select a departure airport to set the time zone.</small></div><button class="current-time-button" type="button" id="use-current-pushback-time">Use Current Time</button></div>
             <div class="flight-duration-pair">
               <label class="flight-field taxi-minutes-field"><span>Taxi (mins)</span><input name="taxiMinutes" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></label>
               <fieldset class="flight-field duration-field"><legend>Flight Time</legend><div><label><input name="flightHours" type="number" min="0" max="30" inputmode="numeric" placeholder="0"><small>hours</small></label><b>:</b><label><input name="flightMinutes" type="number" min="0" max="59" inputmode="numeric" placeholder="00"><small>minutes</small></label></div></fieldset>
@@ -849,15 +976,15 @@ function renderFlightInformation() {
         </section>
         <section class="flight-panel notes-panel">
           <div class="flight-fields notes-fields">
-            <label class="flight-field flight-notes-field"><span>Flight notes</span><textarea name="flightInformation" rows="3" placeholder="Add operational notes such as weather, turbulence, delays or other items to brief the crew."></textarea></label>
+            <label class="flight-field"><span>Flight notes</span><textarea name="flightInformation" rows="3" placeholder="Add operational notes such as weather, turbulence, delays or other items to brief the crew."></textarea></label>
           </div>
         </section>
         <section class="flight-panel flight-weather-panel" aria-labelledby="flight-weather-title">
-          <div class="flight-panel-head flight-weather-head"><h3 id="flight-weather-title">How&#39;s The Weather?</h3><button class="weather-refresh-button" type="button" id="refresh-flight-weather">Refresh</button></div>
-          <p class="flight-weather-intro">Forecast for your planned departure and arrival time.</p>
+          <div class="flight-panel-head flight-weather-head"><h3 id="flight-weather-title">Departure &amp; Arrival Forecast</h3><button class="weather-refresh-button" type="button" id="refresh-flight-weather">Refresh</button></div>
+          <p class="flight-weather-intro">Hourly forecast for your planned pushback and arrival times, with conditions, temperature, rain chance, wind and visibility.</p>
           <div class="flight-weather-grid">
-            <article class="flight-weather-card"><div class="flight-weather-card-head"><h4 id="flight-weather-origin-title">Departure airport</h4><div id="flight-weather-origin-condition" class="flight-weather-condition"></div></div><div id="flight-weather-origin" class="flight-weather-details">Select a route and pushback time for a forecast.</div></article>
-            <article class="flight-weather-card"><div class="flight-weather-card-head"><h4 id="flight-weather-destination-title">Arrival airport</h4><div id="flight-weather-destination-condition" class="flight-weather-condition"></div></div><div id="flight-weather-destination" class="flight-weather-details">Enter flight and taxi times for an arrival forecast.</div></article>
+            <article class="flight-weather-card"><h4 id="flight-weather-origin-title">Departure airport</h4><div id="flight-weather-origin" class="flight-weather-details">Select a route and pushback time for a forecast.</div></article>
+            <article class="flight-weather-card"><h4 id="flight-weather-destination-title">Arrival airport</h4><div id="flight-weather-destination" class="flight-weather-details">Enter flight and taxi times for an arrival forecast.</div></article>
           </div>
           <p id="flight-weather-status" class="flight-weather-status" role="status" aria-live="polite">Forecasts are supplied by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.</p>
         </section>
@@ -967,16 +1094,16 @@ function renderFlightInformation() {
     capPassengerCounts();
     updateFlightSummary();
   };
+  form.addEventListener('input', handleFlightInput);
+  form.addEventListener('change', handleFlightInput);
   const weatherFields = ['destination', 'originAirport', 'pushback', 'flightHours', 'flightMinutes', 'taxiMinutes'];
   const scheduleWeatherUpdate = event => {
     if (!weatherFields.includes(event.target.name)) return;
     clearTimeout(flightWeatherUpdateTimer);
     flightWeatherUpdateTimer = setTimeout(() => updateFlightWeather(), 450);
   };
-  for (const type of ['input', 'change']) {
-    form.addEventListener(type, handleFlightInput);
-    form.addEventListener(type, scheduleWeatherUpdate);
-  }
+  form.addEventListener('input', scheduleWeatherUpdate);
+  form.addEventListener('change', scheduleWeatherUpdate);
   content.querySelector('#refresh-flight-weather').addEventListener('click', () => updateFlightWeather({ force: true }));
   content.querySelector('#use-current-pushback-time').addEventListener('click', () => {
     const selectedZone = destinationTimeZones[form.elements.originAirport.value];
@@ -1008,20 +1135,6 @@ function renderFlightInformation() {
       : 'Not entered';
     const pax = ['business', 'premiumEconomy', 'economy', 'infants'].reduce((sum, name) => sum + Math.max(0, Number(values[name]) || 0), 0);
     const flightTime = `${values.flightHours || '0'}h ${values.flightMinutes || '0'}m`;
-    const snapshotWeather = [
-      ['Departure', origin || 'Not selected', 'origin'],
-      ['Arrival', destination, 'destination']
-    ].map(([label, airportName, role]) => {
-      const condition = content.querySelector(`#flight-weather-${role}-condition`).textContent.trim();
-      const output = content.querySelector(`#flight-weather-${role}`);
-      const details = Object.fromEntries([...output.querySelectorAll('dt')].map(term => [term.textContent.trim(), term.nextElementSibling?.textContent.trim() || '']));
-      const temperature = details.Temperature
-        ? `${details.Temperature}${details['Feels like'] ? ` (feels ${details['Feels like']})` : ''}`
-        : '';
-      const brief = [temperature, details['Rain chance'] ? `Rain ${details['Rain chance']}` : '', details.Wind ? `Wind ${details.Wind}` : '', details.Gusts ? `gusts ${details.Gusts}` : '']
-        .filter(Boolean).join(' · ');
-      return { label: `${label} · ${airportName}`, condition, brief };
-    });
     const rows = [
       ['Route', `${origin ? `${origin} → ` : ''}${destination}`],
       ['Pushback', pushback],
@@ -1031,7 +1144,6 @@ function renderFlightInformation() {
       ['Total Passengers', String(pax)],
       ['Dublin arrival', content.querySelector('#estimated-arrival-dublin').textContent],
       ['Local arrival', content.querySelector('#estimated-arrival-destination').textContent],
-      ['Route weather', snapshotWeather],
       ['Flight notes', values.flightInformation || 'None']
     ];
     content.querySelector('#flight-snapshot-content').innerHTML = rows.map(([label, value]) => {
@@ -1039,10 +1151,6 @@ function renderFlightInformation() {
       if (label === 'Passengers') {
         const passengers = value.map(([name, count]) => `<div><span>${escapeHtml(name)}</span><strong>${escapeHtml(count)}</strong></div>`).join('');
         return `<section class="snapshot-row snapshot-passenger-row"><span>${escapeHtml(label)}</span><div class="snapshot-passenger-list">${passengers}</div></section>`;
-      }
-      if (label === 'Route weather') {
-        const forecasts = value.map(({ label: airportLabel, condition, brief }) => `<div><strong>${escapeHtml(airportLabel)}${condition ? ` · ${escapeHtml(condition)}` : ''}</strong><span>${escapeHtml(brief || 'Forecast not available')}</span></div>`).join('');
-        return `<section class="snapshot-row snapshot-weather-row"><span>${escapeHtml(label)}</span><div class="snapshot-weather-list">${forecasts}</div></section>`;
       }
       const formattedValue = escapeHtml(value);
       return `<section class="snapshot-row${rowClass}"><span>${escapeHtml(label)}</span><strong>${formattedValue}</strong></section>`;
@@ -1061,7 +1169,7 @@ function formatFlightTime(date, timeZone) {
     hourCycle: 'h23', timeZoneName: 'short'
   }).formatToParts(date);
   const part = type => parts.find(item => item.type === type)?.value || '';
-  return `${part('hour')}:${part('minute')} (${part('timeZoneName')}) | ${part('day')} ${part('month')}`;
+  return `${part('hour')}:${part('minute')} ${part('timeZoneName')} | ${part('day')}-${part('month')}`;
 }
 
 async function updateFlightWeather({ force = false } = {}) {
@@ -1077,14 +1185,10 @@ async function updateFlightWeather({ force = false } = {}) {
   const destinationTitle = panel.querySelector('#flight-weather-destination-title');
   const originOutput = panel.querySelector('#flight-weather-origin');
   const destinationOutput = panel.querySelector('#flight-weather-destination');
-  const originCondition = panel.querySelector('#flight-weather-origin-condition');
-  const destinationCondition = panel.querySelector('#flight-weather-destination-condition');
   const status = panel.querySelector('#flight-weather-status');
 
   originTitle.textContent = origin ? `Departure · ${origin.name}` : 'Departure airport';
   destinationTitle.textContent = destination ? `Arrival · ${destination.name}` : 'Arrival airport';
-  originCondition.textContent = '';
-  destinationCondition.textContent = '';
   status.innerHTML = 'Forecast data from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.';
 
   if (!destination) {
@@ -1142,10 +1246,7 @@ async function updateFlightWeather({ force = false } = {}) {
       return;
     }
     const { airport, time, hourly } = result.value;
-    const forecast = renderFlightWeatherForecast(hourly, time, destinationTimeZones[airport.code] || 'UTC');
-    const condition = role === 'origin' ? originCondition : destinationCondition;
-    condition.innerHTML = forecast.condition;
-    output.innerHTML = forecast.details;
+    output.innerHTML = renderFlightWeatherForecast(hourly, time, destinationTimeZones[airport.code] || 'UTC');
   });
   if (failed) status.textContent = 'One or more forecasts could not be loaded. You can try again using Refresh.';
 }
@@ -1156,7 +1257,7 @@ async function fetchHourlyForecast(airport, force = false) {
   const [latitude, longitude] = destinationAirportCoordinates[airport.code];
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.search = new URLSearchParams({
-    latitude, longitude, hourly: 'temperature_2m,apparent_temperature,precipitation_probability,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+    latitude, longitude, hourly: 'temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,cloud_cover',
     forecast_days: '7', timezone: 'UTC', temperature_unit: 'celsius', wind_speed_unit: 'kmh'
   });
   const response = await fetch(url);
@@ -1184,7 +1285,7 @@ function renderFlightWeatherForecast(hourly, targetTime, timeZone) {
     }
   });
   if (selectedIndex < 0 || shortestDifference > 90 * 60_000) {
-    return { condition: '', details: '<p class="flight-weather-unavailable">A forecast is not available for this time yet.</p>' };
+    return '<p class="flight-weather-unavailable">A forecast is not available for this time yet.</p>';
   }
 
   const value = key => hourly[key]?.[selectedIndex];
@@ -1206,8 +1307,6 @@ function renderFlightWeatherForecast(hourly, targetTime, timeZone) {
   const rainChance = numeric('precipitation_probability');
   const precipitation = numeric('precipitation');
   if (Number.isFinite(rainChance)) add('Rain chance', `${Math.round(rainChance)}%${Number.isFinite(precipitation) && precipitation > 0 ? ` · ${precipitation.toFixed(1)} mm expected` : ''}`);
-  const humidity = numeric('relative_humidity_2m');
-  if (Number.isFinite(humidity)) add('Humidity', `${Math.round(humidity)}%`);
   const windSpeed = numeric('wind_speed_10m');
   if (Number.isFinite(windSpeed)) {
     const direction = describeWindDirection(numeric('wind_direction_10m'));
@@ -1215,23 +1314,12 @@ function renderFlightWeatherForecast(hourly, targetTime, timeZone) {
   }
   const gust = numeric('wind_gusts_10m');
   if (Number.isFinite(gust)) add('Gusts', `${Math.round(gust)} km/h`);
-  const pairedLabels = { Temperature: 'Feels like', 'Rain chance': 'Humidity', Wind: 'Gusts' };
-  const detailRows = [];
-  for (let index = 0; index < details.length; index += 1) {
-    const [label, text] = details[index];
-    if (pairedLabels[label] && details[index + 1]?.[0] === pairedLabels[label]) {
-      const [nextLabel, nextText] = details[index + 1];
-      detailRows.push(`<div class="weather-detail-pair"><div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd></div><div><dt>${escapeHtml(nextLabel)}</dt><dd>${escapeHtml(nextText)}</dd></div></div>`);
-      index += 1;
-    } else {
-      detailRows.push(`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd></div>`);
-    }
-  }
+  const visibility = numeric('visibility');
+  if (Number.isFinite(visibility)) add('Visibility', visibility < 1000 ? 'Under 1 km' : `${(visibility / 1000).toFixed(1)} km`);
+  const clouds = numeric('cloud_cover');
+  if (Number.isFinite(clouds)) add('Cloud cover', `${Math.round(clouds)}%`);
 
-  return {
-    condition: `<span aria-hidden="true">${icon}</span> ${escapeHtml(condition)}`,
-    details: `<p class="weather-forecast-time">Forecast for ${escapeHtml(localTime)} local time</p><dl>${detailRows.join('')}</dl>`
-  };
+  return `<div class="flight-weather-condition"><span aria-hidden="true">${icon}</span> ${escapeHtml(condition)}</div><p class="weather-forecast-time">Forecast for ${escapeHtml(localTime)} local time</p><dl>${details.map(([label, text]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd></div>`).join('')}</dl>`;
 }
 
 function describeWindDirection(value) {
@@ -1289,7 +1377,7 @@ function openSection(id, updateRoute = true) {
   }
   const section = sections[id];
   if (!section) return;
-  content.innerHTML = heading('', section.title, section.desc) + renderCards(section.cards || [], id === 'crew' ? 'crew-card-grid' : '');
+  content.innerHTML = heading('', section.title, section.desc) + renderCards(section.cards || []);
   if (id === 'crew') {
     initCreditDatesCard();
     initCommissionCalculator();
@@ -1337,7 +1425,7 @@ document.querySelector('.home-button').addEventListener('click', event => {
 
 const searchable = [
   ...data.destinations.map(destination => ({ id: 'destinations', title: destination.name, tag: destination.code, detail: `${destination.country} · ${destination.routeStatus}`, destinationCode: destination.code, group: 'Destinations' })),
-  ...data.destinationFacts.map((fact, index) => ({ id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value, destinationCode: fact.code, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}` })),
+  ...data.destinationFacts.map((fact, index) => ({ id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value, destinationCode: fact.code, destinationName: fact.destination, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}` })),
   ...aircraftConfigurations().flatMap(aircraft => [
     { id: 'aircraft', title: aircraft.type, tag: 'AIRCRAFT', detail: `${aircraft.total} passenger seats · ${aircraft.registrations.join(', ')}`, aircraftId: aircraftId(aircraft), group: 'Aircraft' },
     ...aircraft.registrations.map(registration => ({ id: 'aircraft', title: registration, tag: aircraft.type, detail: `${aircraft.total} passenger seats · ${aircraft.cabinCrewSeats} cabin crew seats`, aircraftId: aircraftId(aircraft), group: 'Aircraft' }))
@@ -1438,27 +1526,3 @@ installButton.addEventListener('click', async () => {
   installButton.hidden = true;
 });
 
-if ('serviceWorker' in navigator) {
-  const syncStatus = document.querySelector('#sync-status');
-  navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data?.type !== 'CACHE_STATUS') return;
-    if (!event.data.ready) {
-      syncStatus.textContent = 'Offline references unavailable';
-      return;
-    }
-    const synced = event.data.syncedAt ? new Date(event.data.syncedAt) : null;
-    const label = synced && Number.isFinite(synced.getTime())
-      ? new Intl.DateTimeFormat('en-IE', { dateStyle: 'medium', timeStyle: 'short' }).format(synced)
-      : 'time unknown';
-    syncStatus.textContent = `Offline references ready · Last sync ${label}`;
-  });
-  window.addEventListener('load', async () => {
-    try {
-      await navigator.serviceWorker.register('./service-worker.js');
-      const registration = await navigator.serviceWorker.ready;
-      (navigator.serviceWorker.controller || registration.active)?.postMessage('GET_CACHE_STATUS');
-    } catch {
-      syncStatus.textContent = 'Offline references not available';
-    }
-  });
-}
