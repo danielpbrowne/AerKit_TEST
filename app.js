@@ -459,6 +459,7 @@ content.addEventListener('submit', event => {
     const start = toMinutes(form.elements.breakStart.value);
     const end = toMinutes(form.elements.breakEnd.value);
     const windowMinutes = (end - start + 1440) % 1440;
+    const inFlightRest = form.elements.inFlightRest.value === 'yes';
     const formatDuration = minutes => {
       const totalSeconds = Math.round(minutes * 60);
       const hours = Math.floor(totalSeconds / 3600);
@@ -471,7 +472,12 @@ content.addEventListener('submit', event => {
       result.hidden = false;
       return;
     }
-    result.innerHTML = `<div class="acclim-result-copy"><strong>Break time per crew member</strong><p class="fdp-basic-result-time">${formatDuration(windowMinutes / 2)}</p><p>Landing time (reference only): ${form.elements.landingTime.value}.</p></div>`;
+    const breakPerCrew = windowMinutes / 2;
+    const minimum = inFlightRest ? 180 : 60;
+    const prompt = breakPerCrew <= minimum
+      ? `<p class="break-minimum-prompt"><strong>Review the break times:</strong> this result is ${formatDuration(breakPerCrew)}. Revise the times to meet the ${formatDuration(minimum)} minimum per crew member.</p>`
+      : '';
+    result.innerHTML = `<div class="acclim-result-copy"><strong>Break time per crew member</strong><p class="fdp-basic-result-time">${formatDuration(breakPerCrew)}</p><p>Landing time (reference only): ${form.elements.landingTime.value}.</p>${prompt}</div>`;
     result.hidden = false;
     return;
   }
@@ -637,6 +643,7 @@ function renderBreakPlanner() {
     <form class="break-planner-preview" id="break-planner-form">
       <fieldset class="break-planner-inputs"><legend>Flight times</legend>
       <div class="break-planner-fields">
+        <label class="acclim-field"><span>Will this duty use in-flight rest?</span><select name="inFlightRest" required><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="acclim-field"><span>1st Break Start (DUB Time)</span><input name="breakStart" type="time" required></label>
         <label class="acclim-field"><span>Landing Time (DUB Time)</span><input name="landingTime" type="time" required></label>
         <label class="acclim-field"><span>2nd Break End Time</span><input name="breakEnd" type="time" required></label>
