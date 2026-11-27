@@ -549,9 +549,12 @@ function updateNinthCrewEstimate() {
   result.hidden = false;
 }
 
+function normalizeOperationalStatus(value) {
+  return String(value).toLocaleLowerCase() === 'year round' ? 'All Year Round' : String(value);
+}
+
 function renderDestinations() {
   clearInterval(destinationClockTimer);
-  const countries = [...new Set(data.destinations.map(destination => destination.country))].sort((a, b) => a.localeCompare(b));
   const getAircraftTypes = destination => {
     const typical = Array.isArray(destination.typicalAircraft)
       ? destination.typicalAircraft
@@ -563,35 +566,32 @@ function renderDestinations() {
   content.innerHTML = heading('', sections.destinations.title, sections.destinations.desc)
     + `<div class="destination-tools">
       <label class="destination-search"><span>Find a destination</span><input id="destination-search" type="search" placeholder="City, country, code or aircraft type" autocomplete="off"></label>
-      <label class="destination-filter"><span>Country</span><select id="destination-country"><option value="">All countries</option>${countries.map(country => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join('')}</select></label>
-      <label class="destination-filter"><span>Route</span><select id="destination-route"><option value="">All routes</option><option value="year-round">Year-round</option><option value="seasonal">Seasonal</option></select></label>
+      <label class="destination-filter"><span>Operates</span><select id="destination-operational-status"><option value="">All statuses</option><option value="All Year Round">All Year Round</option><option value="Summer Seasonal">Summer Seasonal</option><option value="Winter Seasonal">Winter Seasonal</option></select></label>
       <label class="destination-filter"><span>Aircraft</span><select id="destination-aircraft"><option value="">All aircraft</option>${aircraftOptions.map(type => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join('')}</select></label>
     </div><p class="destination-result-count" id="destination-result-count" aria-live="polite"></p><div class="destination-list" id="destination-list"></div>`;
   const searchInput = content.querySelector('#destination-search');
-  const countryFilter = content.querySelector('#destination-country');
-  const routeFilter = content.querySelector('#destination-route');
+  const operationalStatusFilter = content.querySelector('#destination-operational-status');
   const aircraftFilter = content.querySelector('#destination-aircraft');
   const listElement = content.querySelector('#destination-list');
   const countElement = content.querySelector('#destination-result-count');
   const renderList = () => {
     const query = searchInput.value.trim().toLocaleLowerCase();
-    const country = countryFilter.value;
-    const route = routeFilter.value;
+    const operationalStatus = operationalStatusFilter.value;
     const aircraftType = aircraftFilter.value;
     const filtered = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name)).filter(destination => {
       const aircraftTypes = getAircraftTypes(destination);
-      const searchableValues = [destination.name, destination.country, destination.code, destination.routeStatus, ...aircraftTypes];
+      const searchableValues = [destination.name, destination.country, destination.code, normalizeOperationalStatus(destination.operationalStatus), ...aircraftTypes];
       if (destination.peakSeasonLabel) searchableValues.push(destination.peakSeasonLabel);
       const matchesQuery = !query || searchableValues.some(value => String(value).toLocaleLowerCase().includes(query));
-      const matchesCountry = !country || destination.country === country;
-      const seasonal = destination.routeStatus.toLocaleLowerCase().includes('seasonal');
-      const matchesRoute = !route || (route === 'seasonal' ? seasonal : !seasonal);
+      const status = normalizeOperationalStatus(destination.operationalStatus);
+      const matchesStatus = !operationalStatus || status === operationalStatus;
       const matchesAircraft = !aircraftType || aircraftTypes.includes(aircraftType);
-      return matchesQuery && matchesCountry && matchesRoute && matchesAircraft;
+      return matchesQuery && matchesStatus && matchesAircraft;
     });
     countElement.textContent = `${filtered.length} ${filtered.length === 1 ? 'destination' : 'destinations'}`;
     listElement.innerHTML = filtered.length ? filtered.map(destination => {
-      const seasonal = destination.routeStatus.toLocaleLowerCase().includes('seasonal');
+      const status = normalizeOperationalStatus(destination.operationalStatus);
+      const seasonal = status.toLocaleLowerCase().includes('seasonal');
       const typicalTypes = Array.isArray(destination.typicalAircraft)
         ? destination.typicalAircraft
         : destination.typicalAircraft ? [destination.typicalAircraft] : [];
@@ -599,12 +599,12 @@ function renderDestinations() {
       const aircraft = typicalTypes.length || peakSeasonTypes.length
         ? `<span class="destination-aircraft">${typicalTypes.map(type => `<span class="destination-aircraft-tag">${escapeHtml(type)}</span>`).join('')}${peakSeasonTypes.map(type => `<span class="destination-aircraft-tag is-seasonal">${escapeHtml(type)} · ${escapeHtml(destination.peakSeasonLabel || 'Seasonal')}</span>`).join('')}</span>`
         : '';
-      return `<button class="destination" data-destination="${escapeHtml(destination.code)}"><span class="destination-main"><strong>${escapeHtml(destination.name)}</strong><span class="destination-code">${escapeHtml(destination.code)}</span></span><span class="destination-details"><span>${escapeHtml(destination.country)}</span><span class="destination-route ${seasonal ? 'is-seasonal' : ''}">${escapeHtml(destination.routeStatus)}</span></span>${aircraft}</button>`;
+      return `<button class="destination" data-destination="${escapeHtml(destination.code)}"><span class="destination-main"><strong>${escapeHtml(destination.name)}</strong><span class="destination-code">${escapeHtml(destination.code)}</span></span><span class="destination-details">${aircraft}<span class="destination-status ${seasonal ? 'is-seasonal' : ''}">${escapeHtml(status)}</span></span></button>`;
     }).join('') : '<div class="destination-empty"><strong>No destinations found</strong><span>Try a different city, country, code or filter.</span></div>';
     listElement.querySelectorAll('[data-destination]').forEach(button => button.onclick = () => openDestination(button.dataset.destination));
   };
   searchInput.addEventListener('input', renderList);
-  [countryFilter, routeFilter, aircraftFilter].forEach(control => control.addEventListener('change', renderList));
+  [operationalStatusFilter, aircraftFilter].forEach(control => control.addEventListener('change', renderList));
   renderList();
 }
 
@@ -835,7 +835,7 @@ function openDestination(code) {
   clearInterval(destinationClockTimer);
   setActive('destinations');
   content.innerHTML = `<button class="back-button" data-back>← ALL DESTINATIONS</button>`
-    + `<div class="destination-heading"><div class="destination-title-row"><h2>${escapeHtml(destination.name)}</h2><span class="destination-code" aria-label="Airport code ${escapeHtml(destination.code)}">${escapeHtml(destination.code)}</span></div><div class="destination-meta"><div><span>COUNTRY</span><strong>${escapeHtml(destination.country)}</strong></div><div><span>OPERATES</span><strong>${escapeHtml(destination.routeStatus)}</strong></div></div></div>`
+    + `<div class="destination-heading"><div class="destination-title-row"><h2>${escapeHtml(destination.name)}</h2><span class="destination-code" aria-label="Airport code ${escapeHtml(destination.code)}">${escapeHtml(destination.code)}</span></div><div class="destination-meta"><div><span>COUNTRY</span><strong>${escapeHtml(destination.country)}</strong></div><div><span>OPERATES</span><strong>${escapeHtml(normalizeOperationalStatus(destination.operationalStatus))}</strong></div></div></div>`
     + renderDestinationProfile(destination);
   content.querySelector('[data-back]').onclick = () => openSection('destinations');
   updateDestinationClock(destination);
@@ -1411,7 +1411,7 @@ document.querySelector('.home-button').addEventListener('click', event => {
 });
 
 const searchable = [
-  ...data.destinations.map(destination => ({ id: 'destinations', title: destination.name, tag: destination.code, detail: `${destination.country} · ${destination.routeStatus}`, destinationCode: destination.code, group: 'Destinations' })),
+  ...data.destinations.map(destination => ({ id: 'destinations', title: destination.name, tag: destination.code, detail: `${destination.country} · ${normalizeOperationalStatus(destination.operationalStatus)}`, destinationCode: destination.code, group: 'Destinations' })),
   ...data.destinationFacts.map((fact, index) => ({ id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value, destinationCode: fact.code, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}` })),
   ...aircraftConfigurations().flatMap(aircraft => [
     { id: 'aircraft', title: aircraft.type, tag: 'AIRCRAFT', detail: `${aircraft.total} passenger seats · ${aircraft.registrations.join(', ')}`, aircraftId: aircraftId(aircraft), group: 'Aircraft' },
