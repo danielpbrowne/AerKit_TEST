@@ -448,6 +448,34 @@ function updateRestExtensionFields(form) {
 }
 
 content.addEventListener('submit', event => {
+  if (event.target.id === 'break-planner-form') {
+    event.preventDefault();
+    const form = event.target;
+    const result = form.querySelector('#break-planner-result');
+    const toMinutes = value => {
+      const [hours, minutes] = value.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+    const start = toMinutes(form.elements.breakStart.value);
+    const end = toMinutes(form.elements.breakEnd.value);
+    const windowMinutes = (end - start + 1440) % 1440;
+    const formatDuration = minutes => {
+      const totalSeconds = Math.round(minutes * 60);
+      const hours = Math.floor(totalSeconds / 3600);
+      const remainingMinutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return [hours ? `${hours} hr${hours === 1 ? '' : 's'}` : '', remainingMinutes ? `${remainingMinutes} min` : '', seconds ? `${seconds} sec` : ''].filter(Boolean).join(' ') || '0 min';
+    };
+    if (!windowMinutes) {
+      result.innerHTML = '<div class="acclim-result-copy"><strong>Check the break window</strong><p>The opening and closing times must define a window longer than zero minutes.</p></div>';
+      result.hidden = false;
+      return;
+    }
+    result.innerHTML = `<div class="acclim-result-copy"><strong>Break time per crew member</strong><p class="fdp-basic-result-time">${formatDuration(windowMinutes / 2)}</p><p>Landing time (reference only): ${form.elements.landingTime.value}.</p></div>`;
+    result.hidden = false;
+    return;
+  }
+
   if (event.target.id === 'inflight-rest-extension-form') {
     event.preventDefault();
     const form = event.target;
@@ -504,6 +532,10 @@ content.addEventListener('submit', event => {
   const sectorCaps = code === 'X' ? '<p class="acclim-cap-title"><strong>Maximum daily FDP cap</strong></p><ul class="acclim-cap-list"><li><b>1–2 sectors</b><span>11:00</span></li><li><b>3 sectors</b><span>10:30</span></li><li><b>4 sectors</b><span>10:00</span></li></ul>' : '';
   result.innerHTML = `<span class="acclim-result-code">${code}</span><div class="acclim-result-copy"><strong>${title}</strong><p>${description}</p>${sectorCaps}</div>`;
   result.hidden = false;
+});
+content.addEventListener('reset', event => {
+  const result = event.target.querySelector('#break-planner-result');
+  if (result) result.hidden = true;
 });
 content.addEventListener('change', event => {
   const form = event.target.closest('#inflight-rest-extension-form');
@@ -601,25 +633,18 @@ function renderBreakPlanner() {
   return `<article class="card fdp-card break-planner-card">
     <span class="card-tag">${escapeHtml(sections.crewRest.cards[2][0])}</span>
     <h3>${escapeHtml(sections.crewRest.cards[2][1])}</h3>
-    <p>Plan individual in-flight breaks and check them against the applicable collective agreement and EASA FTL requirements.</p>
-    <div class="break-planner-status" role="status"><strong>Agreement rules pending</strong><span>This layout is ready for review. Break minimums and scheduling checks will be added after the relevant agreement rules are entered.</span></div>
-    <section class="break-planner-reference" aria-labelledby="break-planner-reference-title"><h4 id="break-planner-reference-title">Minimum rest reference</h4><p>Collective agreement minimums will be listed here once the source rules are added. EASA in-flight-rest requirements will be shown separately when an FDP extension applies.</p></section>
-    <fieldset class="break-planner-preview" disabled>
-      <legend>Planned inputs</legend>
+    <p>Enter the start time for 1st Break, the Landing Time, and the End Time for 2nd Break.</p>
+    <form class="break-planner-preview" id="break-planner-form">
+      <fieldset class="break-planner-inputs"><legend>Flight times</legend>
       <div class="break-planner-fields">
-        <label class="acclim-field"><span>Flight time</span><div class="break-duration-inputs"><input type="number" min="0" placeholder="Hours" aria-label="Flight time hours"><input type="number" min="0" max="59" placeholder="Minutes" aria-label="Flight time minutes"></div></label>
-        <label class="acclim-field"><span>Operating cabin crew</span><input type="number" min="1" placeholder="Number of crew"></label>
-        <label class="acclim-field"><span>Available rest positions</span><input type="number" min="1" placeholder="Number of positions"></label>
-        <label class="acclim-field"><span>Rest window opens</span><input type="time" aria-label="Rest window opens"></label>
-        <label class="acclim-field"><span>Rest window closes</span><input type="time" aria-label="Rest window closes"></label>
+        <label class="acclim-field"><span>1st Break Start (DUB Time)</span><input name="breakStart" type="time" required></label>
+        <label class="acclim-field"><span>Landing Time (DUB Time)</span><input name="landingTime" type="time" required></label>
+        <label class="acclim-field"><span>2nd Break End Time</span><input name="breakEnd" type="time" required></label>
       </div>
-      <button class="acclim-calculate" type="button" disabled>Build break plan</button>
-    </fieldset>
-    <section class="break-plan-preview" aria-labelledby="break-plan-preview-title">
-      <h4 id="break-plan-preview-title">Break plan preview</h4>
-      <div class="fdp-table-scroll"><table class="fdp-table break-plan-table"><thead><tr><th scope="col">Crew member</th><th scope="col">Rest period</th><th scope="col">Duration</th><th scope="col">Requirement check</th></tr></thead><tbody><tr><td colspan="4">The per-crew schedule will appear here once agreement rules are added.</td></tr></tbody></table></div>
-    </section>
-    <p class="acclim-note">No break schedule has been calculated. The final planner will show each crew member’s allocation and flag unmet minimums or coverage conflicts.</p>
+      <div class="acclim-actions"><button class="acclim-calculate" type="submit">Calculate break time</button><button class="acclim-reset" type="reset">Reset</button></div>
+      </fieldset>
+      <div class="acclim-result fdp-basic-result" id="break-planner-result" role="status" aria-live="polite" hidden></div>
+    </form>
   </article>`;
 }
 
