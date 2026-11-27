@@ -155,7 +155,13 @@ function renderUsefulContacts() {
     const routes = `${contactAction('EMAIL', contact.email, 'email')}${validPhone ? contactAction('CALL', contact.phone, 'phone') : contact.phone ? `<div class="contact-action contact-action-unverified"><span>PHONE · CHECK SOURCE</span><strong>${escapeHtml(contact.phone)}</strong></div>` : ''}`;
     return `<article class="useful-person-card"><h4>${escapeHtml(contact.name)}</h4><div class="contact-actions">${routes || '<span class="contact-missing">No contact route entered</span>'}</div></article>`;
   }).join('');
-  const contacts = contactCards || '<p class="contact-missing">Contact details are restricted while approved access is being set up.</p>';
+  const accessState = window.AERKIT_AUTH?.status;
+  const restrictionMessage = accessState === 'pending'
+    ? 'Your account is awaiting approval before contact details can be viewed.'
+    : accessState === 'rejected' || accessState === 'suspended'
+      ? 'This account does not currently have access to restricted contact details.'
+      : 'Sign in with an approved account to view restricted contact details.';
+  const contacts = contactCards || `<div class="contact-access-notice"><p class="contact-missing">${escapeHtml(restrictionMessage)}</p>${accessState === 'signed_out' || !accessState ? '<button class="auth-inline-button" type="button" data-auth-open>Sign in</button>' : ''}</div>`;
   content.innerHTML = heading('', sections.contacts.title, '')
     + `<div class="useful-link-grid">${renderGroup('Useful Links', data.usefulLinks || [])}${renderGroup('Useful Forms', data.usefulForms || [])}</div><section class="useful-contact-panel"><h3>Telephone &amp; Email Contacts</h3><div class="useful-contact-grid">${contacts}</div></section>`;
 }
@@ -834,7 +840,13 @@ function renderDestinationProfile(destination) {
   const facts = (data.destinationFacts || []).map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
   const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT ${escapeHtml(destination.name.toUpperCase())}</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div>`;
   if (!facts.length) {
-    return metadata + `<div class="empty"><strong>Destination details are restricted</strong>Approved access is being set up for these records.</div>`;
+    const accessState = window.AERKIT_AUTH?.status;
+    const restrictionMessage = accessState === 'pending'
+      ? 'Your account is awaiting approval before destination details can be viewed.'
+      : accessState === 'rejected' || accessState === 'suspended'
+        ? 'This account does not currently have access to restricted destination details.'
+        : 'Sign in with an approved account to view airport, hotel and transport details.';
+    return metadata + `<div class="empty"><strong>Destination details are restricted</strong>${escapeHtml(restrictionMessage)}${accessState === 'signed_out' || !accessState ? '<button class="auth-inline-button" type="button" data-auth-open>Sign in</button>' : ''}</div>`;
   }
   const grouped = new Map();
   facts.forEach(fact => {
@@ -1647,6 +1659,23 @@ const searchable = [
   ...(data.usefulForms || []).map(form => ({ id: 'contacts', title: form.title, tag: 'USEFUL FORM', detail: 'Online form', group: 'Useful forms' })),
   ...(data.usefulContacts || []).map(contact => ({ id: 'contacts', title: contact.name, tag: 'CONTACT', detail: [contact.phone, contact.email].filter(Boolean).join(' · '), group: 'Contacts' }))
 ];
+
+window.addEventListener('aerkit-access-updated', () => {
+  for (let index = searchable.length - 1; index >= 0; index -= 1) {
+    if (searchable[index].restricted) searchable.splice(index, 1);
+  }
+  if (window.AERKIT_AUTH?.approved) {
+    searchable.push(...(data.destinationFacts || []).map((fact, index) => ({
+      id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value,
+      destinationCode: fact.code, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}`, restricted: true
+    })));
+    searchable.push(...(data.usefulContacts || []).map(contact => ({
+      id: 'contacts', title: contact.name, tag: 'CONTACT', detail: [contact.phone, contact.email].filter(Boolean).join(' · '), group: 'Contacts', restricted: true
+    })));
+  }
+  renderRoute();
+  if (search.value.trim()) showResults(search.value);
+});
 
 function showResults(query) {
   const term = query.trim().toLowerCase();

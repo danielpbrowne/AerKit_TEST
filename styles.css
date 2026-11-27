@@ -145,6 +145,38 @@ main{max-width:1120px;margin:auto;padding:0 30px}
 .contact-action strong{font:600 14px/1.3 Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--navy-deep);overflow-wrap:anywhere}
 .contact-action:hover{border-color:#c3ac65;background:#fbfbf6}
 .contact-missing{font-size:14px;color:var(--muted)}
+.auth-button{min-height:40px;padding:7px 13px;border:1px solid #697a82;border-radius:20px;background:transparent;color:#f7f7f2;font:600 14px Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap}
+.auth-button:hover,.auth-button:focus-visible{background:#294354}
+.auth-inline-button{min-height:40px;margin-top:10px;padding:8px 14px;border:1px solid #176b68;border-radius:5px;background:#176b68;color:#fff;font:600 14px Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.contact-access-notice{display:flex;align-items:flex-start;gap:4px;flex-direction:column}
+.auth-dialog{width:min(480px,calc(100vw - 28px));max-width:none;max-height:min(90vh,720px);padding:0;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);box-shadow:0 24px 80px #0005}
+.auth-dialog::backdrop{background:#0b1a22a8;backdrop-filter:blur(2px)}
+.auth-dialog-inner{padding:22px}
+.auth-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.auth-dialog-heading h2{margin:5px 0 0;color:var(--navy-deep);font:700 25px/1.15 Outfit,Urbanist,sans-serif}
+.auth-close{width:38px;height:38px;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);font-size:26px;line-height:1;cursor:pointer}
+.auth-intro{margin:14px 0;color:var(--muted);font-size:15px;line-height:1.5}
+.auth-mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:16px 0;padding:4px;border-radius:6px;background:var(--canvas)}
+.auth-mode-switch button{min-height:40px;border:0;border-radius:4px;background:transparent;color:var(--muted);font:600 14px Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.auth-mode-switch button[aria-pressed="true"]{background:var(--paper);color:var(--navy-deep);box-shadow:0 1px 4px #142b3b22}
+.auth-form{display:grid;gap:13px}
+.auth-form[hidden],.auth-account-state[hidden]{display:none}
+.auth-submit{min-height:46px;padding:10px 15px;border:1px solid #176b68;border-radius:5px;background:#176b68;color:#fff;font:600 15px Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.auth-submit:disabled{opacity:.6;cursor:wait}
+.auth-secondary{min-height:40px;padding:8px 12px;border:1px solid var(--line);border-radius:5px;background:transparent;color:var(--navy-deep);font:600 14px Urbanist,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.auth-status{min-height:1.4em;margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.auth-status[data-state="error"]{color:#a33b34}
+.auth-account-state{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:6px;background:var(--canvas)}
+.auth-account-state p{margin:0 0 10px;color:var(--muted);line-height:1.5}
+.auth-account-state .auth-account-name{color:var(--navy-deep);font-weight:700}
+.auth-account-state .auth-status-note{margin-bottom:12px}
+.empty .auth-inline-button{display:block}
+html[data-theme="dark"] .auth-dialog{background:var(--paper);color:var(--ink)}
+html[data-theme="dark"] .auth-mode-switch{background:#111d23}
+html[data-theme="dark"] .auth-mode-switch button[aria-pressed="true"],html[data-theme="dark"] .auth-account-state{background:#26353a}
+html[data-theme="dark"] .auth-mode-switch button{color:var(--muted)}
+html[data-theme="dark"] .auth-mode-switch button[aria-pressed="true"]{color:var(--ink)}
+html[data-theme="dark"] .auth-secondary{color:var(--ink)}
 .contact-extra{display:flex;flex-direction:column;gap:8px;justify-content:center}
 .contact-extra>strong{font-size:14px;color:var(--navy-deep)}
 .profile-record{border-top:1px solid #e5e8e2;padding:10px 0}
@@ -174,7 +206,7 @@ footer{display:flex;align-items:center;justify-content:space-between;gap:14px;pa
   html{scroll-padding-top:82px}
   body{overflow-x:hidden;-webkit-text-size-adjust:100%}
   .topbar{height:calc(60px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 15px 0}
-  .top-actions{gap:9px}.search-wrap{width:auto;flex:1 1 auto;min-width:0}.search-box{height:40px;gap:7px;padding:0 9px}.search-box>span{font-size:21px}.search-box input{font-size:15px}.search-box kbd{display:none}.icon-button{min-height:40px}
+  .top-actions{gap:9px}.search-wrap{width:auto;flex:1 1 auto;min-width:0}.search-box{height:40px;gap:7px;padding:0 9px}.search-box>span{font-size:21px}.search-box input{font-size:15px}.search-box kbd{display:none}.icon-button{min-height:40px}.auth-button{min-height:38px;padding:6px 9px;font-size:13px}
   main{width:100%;padding:0 15px}
   .welcome{min-height:145px;margin-top:14px;padding:20px 21px;border-radius:7px}
   .welcome-copy{max-width:100%}
@@ -201,7 +233,7 @@ footer{display:flex;align-items:center;justify-content:space-between;gap:14px;pa
   footer{gap:8px;flex-direction:column;margin-top:28px;padding:20px 0 calc(24px + env(safe-area-inset-bottom))}
 }
 @media(max-width:360px){
-  .topbar{padding-left:11px;padding-right:11px}.top-actions{gap:6px}.home-button{min-height:38px;padding:6px 10px}
+  .topbar{padding-left:11px;padding-right:11px}.top-actions{gap:6px}.home-button{min-height:38px;padding:6px 10px}.auth-button{padding:6px 8px;font-size:12px}
   main{padding-left:11px;padding-right:11px}.welcome{padding-left:17px;padding-right:17px}.destination{padding:18px 12px}.destination strong{font-size:15px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}

@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/AerKit.png?v=aerkit-logo-20261120" type="image/png">
   <link rel="apple-touch-icon" href="assets/AerKit.png?v=aerkit-logo-20261120">
-  <link rel="stylesheet" href="styles.css?v=crew-rest-flow-20261127-r7">
+  <link rel="stylesheet" href="styles.css?v=supabase-access-r1">
   <title>AerKit</title>
 </head>
 <body>
@@ -22,6 +22,7 @@
         <div id="search-results" class="search-results" hidden></div>
       </div>
       <a class="home-button" href="#content-area" aria-label="Home: Crew essentials"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
+      <button class="auth-button" id="auth-open" type="button">Sign in</button>
       <button class="icon-button theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 15.5A9 9 0 0 1 8.5 3.2 9 9 0 1 0 20.8 15.5Z"/></svg></button>
       <button class="icon-button" id="install-button" hidden>Install</button>
     </div>
@@ -51,9 +52,32 @@
       </div>
     </nav>
     <section class="content-area" id="content-area" aria-live="polite"></section>
+    <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-title">
+      <div class="auth-dialog-inner">
+        <div class="auth-dialog-heading"><div><span class="section-kicker">RESTRICTED REFERENCES</span><h2 id="auth-title">AerKit access</h2></div><button class="auth-close" type="button" data-auth-close aria-label="Close">×</button></div>
+        <p class="auth-intro">Sign in with your email to access restricted destination and contact information. Calculators and other open tools remain available without an account.</p>
+        <div class="auth-mode-switch" role="group" aria-label="Account action"><button type="button" data-auth-mode="signin" aria-pressed="true">Sign in</button><button type="button" data-auth-mode="register" aria-pressed="false">Create account</button></div>
+        <form id="auth-email-form" class="auth-form">
+          <label class="flight-field auth-register-field" hidden><span>Name</span><input id="auth-name" name="name" autocomplete="name" maxlength="150"></label>
+          <label class="flight-field auth-register-field" hidden><span>Staff number</span><input id="auth-staff-number" name="staffNumber" autocomplete="off" maxlength="50" inputmode="numeric"></label>
+          <label class="flight-field"><span>Email address</span><input id="auth-email" name="email" type="email" autocomplete="email" required maxlength="254"></label>
+          <button class="auth-submit" type="submit" id="auth-send-code">Email me a sign-in code</button>
+        </form>
+        <form id="auth-otp-form" class="auth-form" hidden>
+          <label class="flight-field"><span>One-time code</span><input id="auth-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" required minlength="6" maxlength="10"></label>
+          <button class="auth-submit" type="submit">Verify code</button>
+          <button class="auth-secondary" type="button" id="auth-back">Use a different email</button>
+        </form>
+        <p class="auth-status" id="auth-status" role="status" aria-live="polite"></p>
+        <section class="auth-account-state" id="auth-account-state" hidden></section>
+      </div>
+    </dialog>
     <footer><span>AERKIT</span><span>App V1.2</span><span id="sync-status" role="status">Offline references: checking…</span></footer>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=access-r1"></script>
   <script src="reference-data.js?v=restricted-data-separation-r3"></script>
-  <script src="app.js?v=crew-rest-flow-20261127-r8"></script>
+  <script src="auth.js?v=supabase-access-r1"></script>
+  <script src="app.js?v=supabase-access-r1"></script>
 </body>
 </html>
