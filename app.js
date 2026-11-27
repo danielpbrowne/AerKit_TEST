@@ -835,7 +835,7 @@ function openDestination(code) {
   clearInterval(destinationClockTimer);
   setActive('destinations');
   content.innerHTML = `<button class="back-button" data-back>← ALL DESTINATIONS</button>`
-    + `<div class="destination-heading"><div class="destination-title-row"><h2>${escapeHtml(destination.name)}</h2><span class="destination-code" aria-label="Airport code ${escapeHtml(destination.code)}">${escapeHtml(destination.code)}</span></div><div class="destination-meta"><div><span>COUNTRY</span><strong>${escapeHtml(destination.country)}</strong></div><div><span>OPERATES</span><strong>${escapeHtml(normalizeOperationalStatus(destination.operationalStatus))}</strong></div></div></div>`
+    + `<div class="destination-heading"><div class="destination-title-row"><h2>${escapeHtml(destination.name)}</h2><span class="destination-code" aria-label="Airport code ${escapeHtml(destination.code)}">${escapeHtml(destination.code)}</span></div></div>`
     + renderDestinationProfile(destination);
   content.querySelector('[data-back]').onclick = () => openSection('destinations');
   updateDestinationClock(destination);
