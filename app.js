@@ -8,8 +8,16 @@ const sections = {
     title: 'Flight & Duty References', desc: '',
     cards: [
       ['BASIC', 'Basic Maximum Daily FDP', 'Basic Maximum FDP is calculated from each crew member’s report time. It is then reduced according to the number of sectors operated as per the table.'],
-      ['ACCLIMATISATION', 'Acclimatisation Checker', 'Check the acclimatisation state for a crew member leaving Dublin.'],
-      ['NINTH CREW MEMBER', '9th Crew Member Protocol', 'When a transatlantic FDP is expected to exceed 13 hours, the CSM / No. 1 contacts the on-duty OCM and Crew Control to request a ninth crew member.']
+      ['ACCLIMATISATION', 'Acclimatisation Checker', 'Check the acclimatisation state for a crew member leaving Dublin.']
+    ]
+  },
+  crewRest: {
+    title: 'Crew Rest & FDP Extensions',
+    desc: 'Plan in-flight rest extensions, review the 9th Crew Member protocol, and prepare crew break plans.',
+    cards: [
+      ['IN-FLIGHT REST', 'In-flight Rest FDP Extension', 'Estimate the maximum FDP and cabin crew rest requirement by rest facility class and flight crew augmentation.'],
+      ['NINTH CREW MEMBER', '9th Crew Member Protocol', 'Review the protocol, estimator, and short-crew credits for transatlantic duties expected to exceed 13 hours.'],
+      ['BREAK PLANNER', 'Break Planner', 'Prepare an individual crew break plan using EASA FTL and collective agreement rules.']
     ]
   },
   ife: {
@@ -399,7 +407,7 @@ function renderBasicFdpCard(card) {
       <div class="acclim-actions"><button class="acclim-calculate" type="submit">Check maximum FDP</button><button class="acclim-reset" type="reset">Reset</button></div>
       <div class="acclim-result fdp-basic-result" id="basic-fdp-result" role="status" aria-live="polite" hidden></div>
     </form>
-    <p class="acclim-note">This is a basic FDP estimate. There are other factors which can affect your Maximum FDP, including; Acclimatisation State, Extension due to In-Flight Rest etc.<br>Ensure all collective agreements are followed and applied where necessary</p>
+    <p class="acclim-note">This is a basic FDP estimate. Check your acclimatisation state and applicable collective agreement rules.</p><a class="fdp-reference-link" href="#/crewRest"><span>RELATED TOOL</span><strong>Crew Rest &amp; FDP Extensions</strong></a>
   </article>`;
 }
 
@@ -407,7 +415,64 @@ function renderAcclimatisationCard(card) {
   return `<article class="card fdp-card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3><p>If you report for duty in Ireland, you are assumed to be acclimatised to Home Base time. Your acclimatisation state at your next outstation report depends on the time elapsed since your Home Base report and the time difference at the outstation.</p><form class="acclim-checker" id="acclim-checker"><label class="acclim-field"><span>Time Difference between Home Base &amp; Next Report Location</span><select name="difference" required><option value="">Select time difference</option><option value="0">Less than 4 hours</option><option value="1">4 to 6 hours</option><option value="2">More than 6 to 9 hours</option><option value="3">More than 9 to 12 hours</option></select></label><label class="acclim-field"><span>Time from Home Base Report until next report time</span><select name="elapsed" required><option value="">Select elapsed time</option><option value="0">Less than 48 hours</option><option value="1">48 to 71 hours 59 minutes</option><option value="2">72 to 95 hours 59 minutes</option><option value="3">96 to 119 hours 59 minutes</option><option value="4">120 hours or more</option></select></label><div class="acclim-actions"><button class="acclim-calculate" type="submit">Check acclimatisation</button><button class="acclim-reset" type="reset">Reset</button></div><div class="acclim-result" id="acclim-result" role="status" aria-live="polite" hidden></div></form><p class="acclim-note">This checker uses the information from EASA ORO.FTL.105 Definitions.</p></article>`;
 }
 
+function formatFdpMinutes(minutes) {
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function minimumCabinCrewRest(maximumFdpMinutes, restClass) {
+  const rows = [
+    [870, [90, 90, 90]], [900, [105, 120, 140]], [930, [120, 140, 160]],
+    [960, [135, 160, 180]], [990, [155, 180, null]], [1020, [180, 205, null]],
+    [1050, [205, null, null]], [1080, [230, null, null]]
+  ];
+  const row = rows.find(([limit]) => maximumFdpMinutes <= limit);
+  return row ? row[1][restClass - 1] : null;
+}
+
+function updateRestExtensionFields(form) {
+  const sectors = form.elements.sectors.value;
+  const options = form.querySelector('.rest-extension-options');
+  const unavailable = sectors === '4';
+  const restClass = form.elements.restClass;
+  const additionalCrew = form.elements.additionalCrew;
+  const longSector = form.elements.longSector;
+  const longSectorField = form.querySelector('.rest-long-sector-field');
+  options.hidden = unavailable;
+  restClass.disabled = unavailable;
+  additionalCrew.disabled = unavailable;
+  longSector.disabled = unavailable;
+  restClass.required = Boolean(sectors) && !unavailable;
+  additionalCrew.required = Boolean(sectors) && !unavailable;
+  longSectorField.hidden = sectors !== '1-2' || unavailable;
+  longSector.required = sectors === '1-2' && !unavailable;
+}
+
 content.addEventListener('submit', event => {
+  if (event.target.id === 'inflight-rest-extension-form') {
+    event.preventDefault();
+    const form = event.target;
+    const result = form.querySelector('#inflight-rest-result');
+    if (form.elements.sectors.value === '4') {
+      result.innerHTML = '<div class="acclim-result-copy"><strong>Extension not available</strong><p>EASA limits this in-flight-rest FDP extension to a maximum of 3 sectors.</p></div>';
+      result.hidden = false;
+      return;
+    }
+    const restClass = Number(form.elements.restClass.value);
+    const additionalCrew = Number(form.elements.additionalCrew.value);
+    const sectors = form.elements.sectors.value;
+    const extraHour = sectors === '1-2' && form.elements.longSector.value === 'yes';
+    const caps = {
+      1: { 1: 960, 2: 900, 3: 840 },
+      2: { 1: 1020, 2: 960, 3: 900 }
+    };
+    const maximumFdp = caps[additionalCrew][restClass] + (extraHour ? 60 : 0);
+    const cabinRest = minimumCabinCrewRest(maximumFdp, restClass);
+    const extraHourText = extraHour ? ' The qualifying sector adds 1 hour to this limit.' : '';
+    result.innerHTML = `<div class="acclim-result-copy"><strong>Maximum daily FDP with in-flight rest</strong><p class="fdp-basic-result-time">${formatFdpMinutes(maximumFdp)}</p><p>Minimum in-flight rest for each cabin crew member, for an FDP up to this limit: <strong>${formatFdpMinutes(cabinRest)}</strong>.</p><p>Based on Class ${restClass} facilities and ${additionalCrew} additional flight crew member${additionalCrew === 1 ? '' : 's'}.${extraHourText} All in-flight rest counts as FDP.</p></div>`;
+    result.hidden = false;
+    return;
+  }
+
   if (event.target.id === 'basic-fdp-checker') {
     event.preventDefault();
     const reportTime = event.target.elements.reportTime.value;
@@ -440,7 +505,32 @@ content.addEventListener('submit', event => {
   result.innerHTML = `<span class="acclim-result-code">${code}</span><div class="acclim-result-copy"><strong>${title}</strong><p>${description}</p>${sectorCaps}</div>`;
   result.hidden = false;
 });
+content.addEventListener('change', event => {
+  const form = event.target.closest('#inflight-rest-extension-form');
+  if (!form) return;
+  updateRestExtensionFields(form);
+  const result = form.querySelector('#inflight-rest-result');
+  result.hidden = true;
+  result.innerHTML = '';
+});
+
 content.addEventListener('reset', event => {
+  if (event.target.id === 'inflight-rest-extension-form') {
+    const form = event.target;
+    const result = form.querySelector('#inflight-rest-result');
+    result.hidden = true;
+    result.innerHTML = '';
+    const options = form.querySelector('.rest-extension-options');
+    options.hidden = false;
+    form.elements.restClass.disabled = false;
+    form.elements.additionalCrew.disabled = false;
+    form.elements.longSector.disabled = false;
+    form.elements.restClass.required = false;
+    form.elements.additionalCrew.required = false;
+    form.elements.longSector.required = false;
+    form.querySelector('.rest-long-sector-field').hidden = true;
+    return;
+  }
   if (!['acclim-checker', 'basic-fdp-checker'].includes(event.target.id)) return;
   const result = event.target.querySelector(event.target.id === 'acclim-checker' ? '#acclim-result' : '#basic-fdp-result');
   result.hidden = true;
@@ -477,6 +567,101 @@ function renderNinthCrewCard(card) {
   const destinationOptions = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name)).map(destination => `<option value="${escapeHtml(destination.code)}">${escapeHtml(destination.name)} (${escapeHtml(destination.code)})</option>`).join("");
   const flightOptions = data.flightSchedule.map((flight, index) => `<option value="${index}">${escapeHtml(flight.flightNumber)}</option>`).join('');
   return `<article class="card fdp-card"><span class="card-tag">${escapeHtml(card[0])}</span><h3>${escapeHtml(card[1])}</h3><p>The 9th Crew Member Protocol applies to transatlantic flights when it becomes apparent that the FDP will exceed 13 hours.</p><div class="protocol-steps"><section><h4><span class="protocol-step-number" aria-hidden="true">1</span>Starting the Process</h4><p>When this is known, the CSM / No. 1 should liaise with the on-duty Operations Crew Manager (OCM) and Crew Control to advise them that a 9th Crew Member is required.</p></section><section><h4><span class="protocol-step-number" aria-hidden="true">2</span>Required Information</h4><p>When contacting the OCM and Crew Control, provide all relevant information available, such as:</p><ul class="protocol-info-list"><li>Nature of the delay</li><li>Expected duration of the delay</li><li>Planned flight time</li><li>Planned taxi time for departure and arrival</li><li>Any other relevant information</li></ul></section><section><h4><span class="protocol-step-number" aria-hidden="true">3</span>If a 9th Crew Member is provided</h4><p>The ninth crew member is surplus to the operating crew and should be used to support in-flight rest. Duty and rest should remain balanced among the operating cabin crew.</p></section><section><h4><span class="protocol-step-number" aria-hidden="true">4</span>If a 9th Crew Member is <em>NOT</em> Provided</h4><p>The CSM should inform the remaining operating crew and explain why a 9th Crew Member may not be available. If none is available, each operating crew member will receive the applicable approved short-crew credit shown below.</p></section></div><div class="protocol-credits"><h4>Short-Crew Credits</h4><table class="fdp-table protocol-credit-table"><thead><tr><th scope="col">Situation in the protocol</th><th scope="col">Credits per crew member</th></tr></thead><tbody><tr><th scope="row">Known delay: FDP exceeds 13 hours and no 9th Crew Member is provided when requested</th><td>28</td></tr><tr><th scope="row">Unknown delay: maximum FDP exceeds 13 h 15 min</th><td>28</td></tr><tr><th scope="row">Unknown delay: maximum FDP is less than 13 h 15 min</th><td>10</td></tr></tbody></table></div><section class="ninth-estimator" aria-labelledby="ninth-estimator-title"><span class="card-tag">ESTIMATE</span><h4 id="ninth-estimator-title">9th Crew Member Estimator</h4><p>Estimate overall duty time from crew report through estimated pushback, flight and arrival taxi.</p><div class="ninth-flight-route-fields"><label class="acclim-field"><span>Flight Number</span><select id="ninth-flight-number" aria-label="Flight Number"><option value="">Select flight number</option>${flightOptions}</select></label><label class="acclim-field"><span>Destination</span><select id="ninth-destination"><option value="">Select destination</option>${destinationOptions}</select></label></div><div class="ninth-estimator-fields"><label class="acclim-field"><span>Crew report time</span><input id="ninth-report-time" type="time" aria-label="Crew report time"></label><label class="acclim-field"><span>Estimated pushback time</span><input id="ninth-pushback-time" type="time" aria-label="Estimated pushback time"></label><fieldset class="flight-field ninth-flight-time"><legend>Flight time</legend><div><label><input id="ninth-flight-hours" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="0" aria-label="Flight time hours"><small>hours</small></label><b>:</b><label><input id="ninth-flight-minutes" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="00" aria-label="Flight time minutes"><small>minutes</small></label></div></fieldset></div><label class="acclim-field ninth-extra-field"><span>Additional information (optional)</span><textarea id="ninth-extra-info" rows="3" placeholder="Add details to include in the request"></textarea></label><p class="ninth-estimator-assumption">This estimator includes an average 15-minute taxi time for departure and arrival. It is not a Maximum FDP calculator.</p><div id="ninth-estimator-result" class="ninth-estimator-result" role="status" aria-live="polite" hidden></div><button class="ninth-reset-button" id="ninth-reset-calculator" type="button">Reset Calculator</button></section><small class="fdp-source-note">Protocol dated 14 December 2018 · addendum dated 12 September 2019.</small></article>`;
+}
+
+
+function renderInFlightRestCalculator() {
+  return `<article class="card fdp-card rest-tool-card">
+    <span class="card-tag">${escapeHtml(sections.crewRest.cards[0][0])}</span>
+    <h3>${escapeHtml(sections.crewRest.cards[0][1])}</h3>
+    <p>Select the rest facility class and additional flight crew to see the applicable EASA maximum FDP and minimum cabin crew rest.</p>
+    <form class="acclim-checker rest-extension-form" id="inflight-rest-extension-form">
+      <label class="acclim-field"><span>Sectors operated</span><select name="sectors" required><option value="">Select sectors</option><option value="1-2">1–2 sectors</option><option value="3">3 sectors</option><option value="4">4 sectors</option></select></label>
+      <div class="rest-extension-options">
+        <label class="acclim-field"><span>In-flight rest facility class</span><select name="restClass"><option value="">Select rest class</option><option value="1">Class 1</option><option value="2">Class 2</option><option value="3">Class 3</option></select></label>
+        <label class="acclim-field"><span>Additional flight crew</span><select name="additionalCrew"><option value="">Select additional crew</option><option value="1">1 additional flight crew member</option><option value="2">2 additional flight crew members</option></select></label>
+        <label class="acclim-field rest-long-sector-field" hidden><span>Does the duty include one sector over 9 hours of continuous flight time?</span><select name="longSector"><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+      </div>
+      <div class="acclim-actions"><button class="acclim-calculate" type="submit">Calculate extension</button><button class="acclim-reset" type="reset">Reset</button></div>
+      <div class="acclim-result fdp-basic-result" id="inflight-rest-result" role="status" aria-live="polite" hidden></div>
+    </form>
+    <details class="rest-reference-details"><summary>Rest facility classes</summary>
+      <p><strong>Class 1:</strong> A bunk or near-flat bed in a separate crew rest area.</p>
+      <p><strong>Class 2:</strong> A seat reclining at least 45°, with at least 55 inches of pitch, 20 inches of width, leg and foot support, and separation from passengers.</p>
+      <p><strong>Class 3:</strong> A seat reclining at least 40°, with leg and foot support, separation from passengers, and no passenger in an adjacent seat.</p>
+    </details>
+    <details class="rest-reference-details"><summary>Key operating conditions</summary>
+      <ul><li>The FDP is limited to 3 sectors, and every crew member must receive the required rest.</li><li>The flight crew members at the controls during landing need 2 consecutive hours of rest; each crew member needs at least 90 consecutive minutes.</li><li>All time in the rest facility counts as FDP. The minimum destination rest is the preceding duty period or 14 hours, whichever is greater.</li><li>This extension cannot be combined with an extension without in-flight rest or split duty. Confirm the route and rest allocation against your operator’s approved FTL scheme.</li></ul>
+    </details>
+    <p class="acclim-note">Planning estimate based on EASA ORO.FTL.205(e) and CS FTL.1.205(c). The operator’s approved scheme sets the applicable conditions.</p>
+  </article>`;
+}
+
+function renderBreakPlanner() {
+  return `<article class="card fdp-card break-planner-card">
+    <span class="card-tag">${escapeHtml(sections.crewRest.cards[2][0])}</span>
+    <h3>${escapeHtml(sections.crewRest.cards[2][1])}</h3>
+    <p>Plan individual in-flight breaks and check them against the applicable collective agreement and EASA FTL requirements.</p>
+    <div class="break-planner-status" role="status"><strong>Agreement rules pending</strong><span>This layout is ready for review. Break minimums and scheduling checks will be added after the relevant agreement rules are entered.</span></div>
+    <section class="break-planner-reference" aria-labelledby="break-planner-reference-title"><h4 id="break-planner-reference-title">Minimum rest reference</h4><p>Collective agreement minimums will be listed here once the source rules are added. EASA in-flight-rest requirements will be shown separately when an FDP extension applies.</p></section>
+    <fieldset class="break-planner-preview" disabled>
+      <legend>Planned inputs</legend>
+      <div class="break-planner-fields">
+        <label class="acclim-field"><span>Flight time</span><div class="break-duration-inputs"><input type="number" min="0" placeholder="Hours" aria-label="Flight time hours"><input type="number" min="0" max="59" placeholder="Minutes" aria-label="Flight time minutes"></div></label>
+        <label class="acclim-field"><span>Operating cabin crew</span><input type="number" min="1" placeholder="Number of crew"></label>
+        <label class="acclim-field"><span>Available rest positions</span><input type="number" min="1" placeholder="Number of positions"></label>
+        <label class="acclim-field"><span>Rest window opens</span><input type="time" aria-label="Rest window opens"></label>
+        <label class="acclim-field"><span>Rest window closes</span><input type="time" aria-label="Rest window closes"></label>
+      </div>
+      <button class="acclim-calculate" type="button" disabled>Build break plan</button>
+    </fieldset>
+    <section class="break-plan-preview" aria-labelledby="break-plan-preview-title">
+      <h4 id="break-plan-preview-title">Break plan preview</h4>
+      <div class="fdp-table-scroll"><table class="fdp-table break-plan-table"><thead><tr><th scope="col">Crew member</th><th scope="col">Rest period</th><th scope="col">Duration</th><th scope="col">Requirement check</th></tr></thead><tbody><tr><td colspan="4">The per-crew schedule will appear here once agreement rules are added.</td></tr></tbody></table></div>
+    </section>
+    <p class="acclim-note">No break schedule has been calculated. The final planner will show each crew member’s allocation and flag unmet minimums or coverage conflicts.</p>
+  </article>`;
+}
+
+function renderCrewRestSection() {
+  const [extensionCard, protocolCard, breakCard] = sections.crewRest.cards;
+  const tabs = [
+    ['extension', 'In-flight rest'],
+    ['protocol', '9th Crew Member'],
+    ['breaks', 'Break Planner']
+  ];
+  content.innerHTML = heading('', sections.crewRest.title, sections.crewRest.desc)
+    + `<div class="crew-rest-workspace">
+      <div class="crew-rest-tabs" role="tablist" aria-label="Crew rest tools">${tabs.map(([id, label], index) => `<button type="button" role="tab" id="crew-rest-tab-${id}" aria-controls="crew-rest-panel-${id}" aria-selected="${index === 0}" tabindex="${index === 0 ? '0' : '-1'}" data-crew-rest-tab="${id}">${label}</button>`).join('')}</div>
+      <section class="crew-rest-panel" role="tabpanel" id="crew-rest-panel-extension" aria-labelledby="crew-rest-tab-extension" tabindex="0">${renderInFlightRestCalculator(extensionCard)}</section>
+      <section class="crew-rest-panel" role="tabpanel" id="crew-rest-panel-protocol" aria-labelledby="crew-rest-tab-protocol" tabindex="0" hidden>${renderNinthCrewCard(protocolCard)}</section>
+      <section class="crew-rest-panel" role="tabpanel" id="crew-rest-panel-breaks" aria-labelledby="crew-rest-tab-breaks" tabindex="0" hidden>${renderBreakPlanner(breakCard)}</section>
+    </div>`;
+  content.querySelectorAll('[data-crew-rest-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      content.querySelectorAll('[data-crew-rest-tab]').forEach(candidate => {
+        const selected = candidate === tab;
+        candidate.setAttribute('aria-selected', String(selected));
+        candidate.tabIndex = selected ? 0 : -1;
+      });
+      content.querySelectorAll('.crew-rest-panel').forEach(panel => {
+        panel.hidden = panel.id !== tab.getAttribute('aria-controls');
+      });
+    });
+    tab.addEventListener('keydown', event => {
+      const tabList = [...content.querySelectorAll('[data-crew-rest-tab]')];
+      const currentIndex = tabList.indexOf(tab);
+      let nextIndex = currentIndex;
+      if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabList.length;
+      else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabList.length) % tabList.length;
+      else if (event.key === 'Home') nextIndex = 0;
+      else if (event.key === 'End') nextIndex = tabList.length - 1;
+      else return;
+      event.preventDefault();
+      tabList[nextIndex].focus();
+      tabList[nextIndex].click();
+    });
+  });
 }
 
 function updateNinthCrewEstimate() {
@@ -1357,6 +1542,7 @@ function openSection(id, updateRoute = true) {
   if (id === 'flightInfo') return renderFlightInformation();
   if (id === 'contacts') return renderUsefulContacts();
   if (id === 'ife') return renderIfeQuickReference();
+  if (id === 'crewRest') return renderCrewRestSection();
   if (id === 'feedback') {
     renderFeedbackPage();
     initFeedbackPage();
@@ -1377,9 +1563,10 @@ function renderCrewEssentials() {
   const links = [
     ['FLIGHT CALCULATOR', 'Flight Plan', 'Passenger Numbers, Flight Times, ETA and Weather Reports for Departure & Arrival', 'flightInfo'],
     ['DESTINATIONS', 'Destination Information', 'Airport, hotel, transport details and station contacts.', 'destinations'],
-    ['FLIGHT & DUTY', 'Check Duty References', 'Basic FDP, acclimatisation and ninth crew member guidance.', 'flight'],
+    ['FLIGHT & DUTY', 'Check Duty References', 'Basic FDP and acclimatisation.', 'flight'],
     ['CREW RESOURCES', 'Useful Links & Contacts', 'Company resources, forms, telephone and email contacts.', 'contacts']
   ];
+  links.push(['CREW REST', 'Crew Rest & FDP Extensions', 'In-flight rest extensions, the 9th Crew Member Protocol and crew break planning.', 'crewRest']);
   content.innerHTML = heading('', sections.essentials.title, sections.essentials.desc)
     + `<div class="card-grid essentials-grid">${links.map(([tag, title, detail, section]) => `<button type="button" class="card essentials-card" data-essential="${section}"><span class="card-tag">${tag}</span><h3>${title}</h3><p>${detail}</p><span class="essentials-open">Open →</span></button>`).join('')}</div>`;
   content.querySelectorAll('[data-essential]').forEach(button => button.addEventListener('click', () => openSection(button.dataset.essential)));
