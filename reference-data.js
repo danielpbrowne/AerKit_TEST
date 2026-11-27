@@ -145,6 +145,9 @@ window.CSM_DATA = {
       "code": "BOS",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
+      "peakSeasonAircraft": ["A321neo"],
+      "peakSeasonLabel": "Peak summer",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -153,6 +156,7 @@ window.CSM_DATA = {
       "code": "CUN",
       "country": "Mexico",
       "routeStatus": "Winter Seasonal",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -161,6 +165,7 @@ window.CSM_DATA = {
       "code": "ORD",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -169,6 +174,7 @@ window.CSM_DATA = {
       "code": "CLE",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -177,6 +183,7 @@ window.CSM_DATA = {
       "code": "BDL",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -185,6 +192,7 @@ window.CSM_DATA = {
       "code": "IND",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -193,6 +201,7 @@ window.CSM_DATA = {
       "code": "LAX",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -201,6 +210,7 @@ window.CSM_DATA = {
       "code": "MIA",
       "country": "United States",
       "routeStatus": "Winter Seasonal",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -209,6 +219,7 @@ window.CSM_DATA = {
       "code": "BNA",
       "country": "United States",
       "routeStatus": "Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -217,6 +228,9 @@ window.CSM_DATA = {
       "code": "JFK",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
+      "peakSeasonAircraft": ["A321neo"],
+      "peakSeasonLabel": "Peak summer",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -225,6 +239,7 @@ window.CSM_DATA = {
       "code": "EWR",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -233,6 +248,7 @@ window.CSM_DATA = {
       "code": "MCO",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -241,6 +257,7 @@ window.CSM_DATA = {
       "code": "PHL",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -249,6 +266,7 @@ window.CSM_DATA = {
       "code": "PIT",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -257,6 +275,7 @@ window.CSM_DATA = {
       "code": "RDU",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -265,6 +284,7 @@ window.CSM_DATA = {
       "code": "SFO",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -273,6 +293,7 @@ window.CSM_DATA = {
       "code": "SEA",
       "country": "United States",
       "routeStatus": "Summer Seasonal",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -281,6 +302,7 @@ window.CSM_DATA = {
       "code": "YYZ",
       "country": "Canada",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A330",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     },
@@ -289,6 +311,7 @@ window.CSM_DATA = {
       "code": "IAD",
       "country": "United States",
       "routeStatus": "All Year Round",
+      "typicalAircraft": "A321neo",
       "lastUpdated": "2026-11-01",
       "reviewStatus": "Current"
     }

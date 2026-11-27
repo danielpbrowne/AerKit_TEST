@@ -552,37 +552,59 @@ function updateNinthCrewEstimate() {
 function renderDestinations() {
   clearInterval(destinationClockTimer);
   const countries = [...new Set(data.destinations.map(destination => destination.country))].sort((a, b) => a.localeCompare(b));
+  const getAircraftTypes = destination => {
+    const typical = Array.isArray(destination.typicalAircraft)
+      ? destination.typicalAircraft
+      : destination.typicalAircraft ? [destination.typicalAircraft] : [];
+    const peakSeason = Array.isArray(destination.peakSeasonAircraft) ? destination.peakSeasonAircraft : [];
+    return [...new Set([...typical, ...peakSeason])];
+  };
+  const aircraftOptions = [...new Set(data.destinations.flatMap(getAircraftTypes))].sort((a, b) => a.localeCompare(b));
   content.innerHTML = heading('', sections.destinations.title, sections.destinations.desc)
     + `<div class="destination-tools">
-      <label class="destination-search"><span>Find a destination</span><input id="destination-search" type="search" placeholder="City, country or airport code" autocomplete="off"></label>
+      <label class="destination-search"><span>Find a destination</span><input id="destination-search" type="search" placeholder="City, country, code or aircraft type" autocomplete="off"></label>
       <label class="destination-filter"><span>Country</span><select id="destination-country"><option value="">All countries</option>${countries.map(country => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join('')}</select></label>
       <label class="destination-filter"><span>Route</span><select id="destination-route"><option value="">All routes</option><option value="year-round">Year-round</option><option value="seasonal">Seasonal</option></select></label>
+      <label class="destination-filter"><span>Aircraft</span><select id="destination-aircraft"><option value="">All aircraft</option>${aircraftOptions.map(type => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join('')}</select></label>
     </div><p class="destination-result-count" id="destination-result-count" aria-live="polite"></p><div class="destination-list" id="destination-list"></div>`;
   const searchInput = content.querySelector('#destination-search');
   const countryFilter = content.querySelector('#destination-country');
   const routeFilter = content.querySelector('#destination-route');
+  const aircraftFilter = content.querySelector('#destination-aircraft');
   const listElement = content.querySelector('#destination-list');
   const countElement = content.querySelector('#destination-result-count');
   const renderList = () => {
     const query = searchInput.value.trim().toLocaleLowerCase();
     const country = countryFilter.value;
     const route = routeFilter.value;
+    const aircraftType = aircraftFilter.value;
     const filtered = [...data.destinations].sort((a, b) => a.name.localeCompare(b.name)).filter(destination => {
-      const matchesQuery = !query || [destination.name, destination.country, destination.code].some(value => value.toLocaleLowerCase().includes(query));
+      const aircraftTypes = getAircraftTypes(destination);
+      const searchableValues = [destination.name, destination.country, destination.code, destination.routeStatus, ...aircraftTypes];
+      if (destination.peakSeasonLabel) searchableValues.push(destination.peakSeasonLabel);
+      const matchesQuery = !query || searchableValues.some(value => String(value).toLocaleLowerCase().includes(query));
       const matchesCountry = !country || destination.country === country;
       const seasonal = destination.routeStatus.toLocaleLowerCase().includes('seasonal');
       const matchesRoute = !route || (route === 'seasonal' ? seasonal : !seasonal);
-      return matchesQuery && matchesCountry && matchesRoute;
+      const matchesAircraft = !aircraftType || aircraftTypes.includes(aircraftType);
+      return matchesQuery && matchesCountry && matchesRoute && matchesAircraft;
     });
     countElement.textContent = `${filtered.length} ${filtered.length === 1 ? 'destination' : 'destinations'}`;
     listElement.innerHTML = filtered.length ? filtered.map(destination => {
       const seasonal = destination.routeStatus.toLocaleLowerCase().includes('seasonal');
-      return `<button class="destination" data-destination="${escapeHtml(destination.code)}"><span class="destination-main"><strong>${escapeHtml(destination.name)}</strong><span class="destination-code">${escapeHtml(destination.code)}</span></span><span class="destination-details"><span>${escapeHtml(destination.country)}</span><span class="destination-route ${seasonal ? 'is-seasonal' : ''}">${escapeHtml(destination.routeStatus)}</span></span></button>`;
+      const typicalTypes = Array.isArray(destination.typicalAircraft)
+        ? destination.typicalAircraft
+        : destination.typicalAircraft ? [destination.typicalAircraft] : [];
+      const peakSeasonTypes = Array.isArray(destination.peakSeasonAircraft) ? destination.peakSeasonAircraft : [];
+      const aircraft = typicalTypes.length || peakSeasonTypes.length
+        ? `<span class="destination-aircraft">${typicalTypes.map(type => `<span class="destination-aircraft-tag">${escapeHtml(type)}</span>`).join('')}${peakSeasonTypes.map(type => `<span class="destination-aircraft-tag is-seasonal">${escapeHtml(type)} · ${escapeHtml(destination.peakSeasonLabel || 'Seasonal')}</span>`).join('')}</span>`
+        : '';
+      return `<button class="destination" data-destination="${escapeHtml(destination.code)}"><span class="destination-main"><strong>${escapeHtml(destination.name)}</strong><span class="destination-code">${escapeHtml(destination.code)}</span></span><span class="destination-details"><span>${escapeHtml(destination.country)}</span><span class="destination-route ${seasonal ? 'is-seasonal' : ''}">${escapeHtml(destination.routeStatus)}</span></span>${aircraft}</button>`;
     }).join('') : '<div class="destination-empty"><strong>No destinations found</strong><span>Try a different city, country, code or filter.</span></div>';
     listElement.querySelectorAll('[data-destination]').forEach(button => button.onclick = () => openDestination(button.dataset.destination));
   };
   searchInput.addEventListener('input', renderList);
-  [countryFilter, routeFilter].forEach(control => control.addEventListener('change', renderList));
+  [countryFilter, routeFilter, aircraftFilter].forEach(control => control.addEventListener('change', renderList));
   renderList();
 }
 
@@ -880,15 +902,17 @@ function renderFlightInformation() {
             <label class="flight-field"><span>Premium Economy</span><input name="premiumEconomy" type="number" min="0" max="28" step="1" inputmode="numeric" placeholder="0"></label>
             <label class="flight-field"><span>Economy</span><input name="economy" type="number" min="0" max="287" step="1" inputmode="numeric" placeholder="0"></label>
           </div>
-          <div class="flight-fields passenger-extra">
-            <label class="flight-field"><span>No. of INF</span><input name="infants" type="number" min="0" inputmode="numeric" placeholder="0"></label>
-            <label class="flight-field"><span>No. of PRM's</span><input name="prms" type="number" min="0" inputmode="numeric" placeholder="0"></label>
+          <div class="flight-fields passenger-extra prm-counts">
+            <label class="flight-field"><span>INF</span><input name="infants" type="number" min="0" inputmode="numeric" placeholder="0"></label>
+            <label class="flight-field"><span>WHCR</span><input name="prmWhcr" type="number" min="0" inputmode="numeric" placeholder="0"></label>
+            <label class="flight-field"><span>WCHS</span><input name="prmWchs" type="number" min="0" inputmode="numeric" placeholder="0"></label>
+            <label class="flight-field"><span>WCHC</span><input name="prmWchsOther" type="number" min="0" inputmode="numeric" placeholder="0"></label>
           </div>
-          <div class="passenger-total"><span>TOTAL PAX · INCLUDES INFANTS</span><strong id="passenger-total">0</strong></div>
+          <div class="passenger-total"><span>TOTAL PAX INC. INFANTS</span><strong id="passenger-total">0</strong></div>
         </section>
         <section class="flight-panel"><div class="flight-panel-head"><h3>Flight Times</h3></div>
           <div class="flight-fields">
-            <div class="flight-pushback-row"><div class="flight-field pushback-time-field"><span>Pushback date and time</span><div class="pushback-inputs"><label><span>Date</span><input id="pushback-date" type="date" aria-label="Pushback date"></label><label><span>Time</span><input id="pushback-clock" type="time" step="60" aria-label="Pushback time"></label></div><input id="pushback-value" name="pushback" type="hidden"><small id="pushback-time-zone" role="status" aria-live="polite">Select a departure airport to set the time zone.</small></div><button class="current-time-button" type="button" id="use-current-pushback-time">Select Current Date &amp; Time</button></div>
+            <div class="flight-pushback-row"><label class="flight-field pushback-time-field"><span>Pushback date and time</span><input id="pushback-value" name="pushback" type="datetime-local" step="60" aria-label="Pushback date and time"><small id="pushback-time-zone" role="status" aria-live="polite">Select a departure airport to set the time zone.</small></label><button class="current-time-button" type="button" id="use-current-pushback-time">Select Current Date &amp; Time</button></div>
             <div class="flight-duration-pair">
               <label class="flight-field taxi-minutes-field"><span>Taxi (mins)</span><input name="taxiMinutes" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></label>
               <fieldset class="flight-field duration-field"><legend>Flight Time</legend><div><label><input name="flightHours" type="number" min="0" max="30" inputmode="numeric" placeholder="0"><small>hours</small></label><b>:</b><label><input name="flightMinutes" type="number" min="0" max="59" inputmode="numeric" placeholder="00"><small>minutes</small></label></div></fieldset>
@@ -1015,15 +1039,6 @@ function renderFlightInformation() {
     capPassengerCounts();
     updateFlightSummary();
   };
-  const pushbackDate = form.querySelector('#pushback-date');
-  const pushbackClock = form.querySelector('#pushback-clock');
-  const syncPushbackValue = event => {
-    if (event && !['pushback-date', 'pushback-clock'].includes(event.target.id)) return;
-    form.elements.pushback.value = pushbackDate.value && pushbackClock.value
-      ? `${pushbackDate.value}T${pushbackClock.value}`
-      : '';
-    form.elements.pushback.dispatchEvent(new Event('input', { bubbles: true }));
-  };
   const weatherFields = ['destination', 'originAirport', 'pushback', 'flightHours', 'flightMinutes', 'taxiMinutes'];
   const scheduleWeatherUpdate = event => {
     if (!weatherFields.includes(event.target.name)) return;
@@ -1031,7 +1046,6 @@ function renderFlightInformation() {
     flightWeatherUpdateTimer = setTimeout(() => updateFlightWeather(), 450);
   };
   for (const type of ['input', 'change']) {
-    form.addEventListener(type, syncPushbackValue);
     form.addEventListener(type, handleFlightInput);
     form.addEventListener(type, scheduleWeatherUpdate);
   }
@@ -1043,13 +1057,11 @@ function renderFlightInformation() {
     if (selectedZone) {
       const parts = new Intl.DateTimeFormat('en-CA', { timeZone: selectedZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
       const part = type => parts.find(item => item.type === type)?.value;
-      pushbackDate.value = `${part('year')}-${part('month')}-${part('day')}`;
-      pushbackClock.value = `${pad(Number(part('hour')))}:${pad(Number(part('minute')))}`;
+      form.elements.pushback.value = `${part('year')}-${part('month')}-${part('day')}T${pad(Number(part('hour')))}:${pad(Number(part('minute')))}`;
     } else {
-      pushbackDate.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-      pushbackClock.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      form.elements.pushback.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
     }
-    syncPushbackValue();
+    form.elements.pushback.dispatchEvent(new Event('input', { bubbles: true }));
   });
   window.addEventListener('pagehide', () => form.reset(), { once: true });
   updateFlightSummary();
@@ -1090,7 +1102,7 @@ function renderFlightInformation() {
       ['Pushback', pushback],
       ['Flight time', flightTime],
       ['Taxi', values.taxiMinutes ? `${values.taxiMinutes} min` : 'Not entered'],
-      ['Passengers', [['Business', values.business || '0'], ['Premium Economy', values.premiumEconomy || '0'], ['Economy', values.economy || '0'], ['INF', values.infants || '0'], ['PRM', values.prms || '0']]],
+      ['Passengers', [['Business', values.business || '0'], ['Premium Economy', values.premiumEconomy || '0'], ['Economy', values.economy || '0'], ['INF', values.infants || '0'], ['PRM', String(['prmWhcr', 'prmWchs', 'prmWchsOther'].reduce((sum, name) => sum + Math.max(0, Number(values[name]) || 0), 0))]]],
       ['Total Passengers', String(pax)],
       ['Dublin arrival', content.querySelector('#estimated-arrival-dublin').textContent],
       ['Local arrival', content.querySelector('#estimated-arrival-destination').textContent],
