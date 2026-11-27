@@ -33,6 +33,7 @@ main{max-width:1120px;margin:auto;padding:0 30px}
 .eyebrow,.section-kicker{font:13px ui-monospace,SFMono-Regular,monospace;letter-spacing:.12em;color:#e3c66d}
 .welcome-copy>.eyebrow{font:700 clamp(32px,4vw,42px)/1.08 Outfit,Urbanist,sans-serif;letter-spacing:.01em;color:#e3c66d;text-transform:none;margin:0}
 .intro{position:relative;z-index:1;font-size:18px;line-height:1.4;color:#d5dedf;max-width:none;margin:0}
+.intro-title{font-size:calc(1em + 1pt);font-weight:700}
 .welcome-region{display:block;font-size:80%;font-weight:700;line-height:1.25;margin-top:3px}
 .welcome-art{position:absolute;right:5%;top:0;width:40%;height:100%;opacity:.95}
 .sun{position:absolute;width:172px;height:172px;border:1px solid #d6c17445;border-radius:50%;top:48px;right:27px;background:radial-gradient(circle,#d8c57a12 0 55%,transparent 56%)}
