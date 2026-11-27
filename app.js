@@ -150,11 +150,12 @@ function heading(kicker, title, description) {
 
 function renderUsefulContacts() {
   const renderGroup = (title, entries) => `<section class="useful-link-card"><h3>${escapeHtml(title)}</h3><div class="useful-link-list">${entries.map(entry => `<a class="useful-resource-link" href="${escapeHtml(entry.url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(entry.title)}</span><b aria-hidden="true">↗</b></a>`).join('')}</div></section>`;
-  const contacts = (data.usefulContacts || []).map(contact => {
+  const contactCards = (data.usefulContacts || []).map(contact => {
     const validPhone = contact.phone && /^[+()\d\s-]+$/.test(contact.phone);
     const routes = `${contactAction('EMAIL', contact.email, 'email')}${validPhone ? contactAction('CALL', contact.phone, 'phone') : contact.phone ? `<div class="contact-action contact-action-unverified"><span>PHONE · CHECK SOURCE</span><strong>${escapeHtml(contact.phone)}</strong></div>` : ''}`;
     return `<article class="useful-person-card"><h4>${escapeHtml(contact.name)}</h4><div class="contact-actions">${routes || '<span class="contact-missing">No contact route entered</span>'}</div></article>`;
   }).join('');
+  const contacts = contactCards || '<p class="contact-missing">Contact details are restricted while approved access is being set up.</p>';
   content.innerHTML = heading('', sections.contacts.title, '')
     + `<div class="useful-link-grid">${renderGroup('Useful Links', data.usefulLinks || [])}${renderGroup('Useful Forms', data.usefulForms || [])}</div><section class="useful-contact-panel"><h3>Telephone &amp; Email Contacts</h3><div class="useful-contact-grid">${contacts}</div></section>`;
 }
@@ -734,9 +735,10 @@ function updateNinthCrewEstimate() {
     resultMessage = `Your estimated duty time will be ${durationText}. Therefore, if you encounter further delays you may require a 9th Crew Member. Revise your estimates as more information becomes available.`;
   } else {
     state = 'red';
-    resultMessage = `Your estimated duty time will be ${durationText}. Therefore, per protocol, you should request a 9th Crew Member. You can call or email Inflight Operations below to provide them with the information.`;
-    callButton = '<a class="ninth-call-button" href="tel:+35318868600">Call Inflight Operations</a>';
-    const emailAddress = (data.usefulContacts || []).find(contact => contact.name === 'Inflight Operations')?.email || 'crewoperations@aerlingus.com';
+    resultMessage = `Your estimated duty time will be ${durationText}. Therefore, per protocol, you should request a 9th Crew Member.`;
+    const operationsContact = (data.usefulContacts || []).find(contact => contact.name === 'Inflight Operations');
+    if (operationsContact?.phone) callButton = `<a class="ninth-call-button" href="tel:${encodeURIComponent(operationsContact.phone)}">Call Inflight Operations</a>`;
+    const emailAddress = operationsContact?.email;
     const flightNumberSelect = document.getElementById('ninth-flight-number');
     const selectedFlight = flightNumberSelect?.value === '' ? null : data.flightSchedule[Number(flightNumberSelect?.value)];
     const flightNumber = selectedFlight?.flightNumber || 'Not entered';
@@ -758,7 +760,10 @@ function updateNinthCrewEstimate() {
       'Please advise on the availability of a 9th Crew Member. If none is available, can you provide me with the explanation so I can brief my crew and ensure all are listed for the appropriate Credit Payment if none is available.', '',
       'Kind regards,'
     ].join('\n');
-    emailButton = `<a class="ninth-email-button" href="mailto:${encodeURI(emailAddress)}?subject=${encodeURIComponent('Request for 9th Crew Member')}&body=${encodeURIComponent(emailBody)}">Email Inflight Operations</a>`;
+    if (emailAddress) emailButton = `<a class="ninth-email-button" href="mailto:${encodeURI(emailAddress)}?subject=${encodeURIComponent('Request for 9th Crew Member')}&body=${encodeURIComponent(emailBody)}">Email Inflight Operations</a>`;
+    resultMessage += callButton || emailButton
+      ? ' Use the contact options below to provide the details.'
+      : ' Contact details are restricted while approved access is being set up.';
   }
   result.dataset.state = state;
   const contactActions = callButton || emailButton ? `<div class="ninth-contact-actions">${callButton}${emailButton}</div>` : '';
@@ -826,10 +831,10 @@ function renderDestinations() {
 }
 
 function renderDestinationProfile(destination) {
-  const facts = data.destinationFacts.map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
+  const facts = (data.destinationFacts || []).map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
   const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT ${escapeHtml(destination.name.toUpperCase())}</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div>`;
   if (!facts.length) {
-    return metadata + `<div class="empty"><strong>No destination details entered yet</strong>This location is present in the destination index, but the source register has no detailed records for it.</div>`;
+    return metadata + `<div class="empty"><strong>Destination details are restricted</strong>Approved access is being set up for these records.</div>`;
   }
   const grouped = new Map();
   facts.forEach(fact => {
@@ -1631,7 +1636,7 @@ document.querySelector('.home-button').addEventListener('click', event => {
 
 const searchable = [
   ...data.destinations.map(destination => ({ id: 'destinations', title: destination.name, tag: destination.code, detail: `${destination.country} · ${normalizeOperationalStatus(destination.operationalStatus)}`, destinationCode: destination.code, group: 'Destinations' })),
-  ...data.destinationFacts.map((fact, index) => ({ id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value, destinationCode: fact.code, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}` })),
+  ...(data.destinationFacts || []).map((fact, index) => ({ id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value, destinationCode: fact.code, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}` })),
   ...aircraftConfigurations().flatMap(aircraft => [
     { id: 'aircraft', title: aircraft.type, tag: 'AIRCRAFT', detail: `${aircraft.total} passenger seats · ${aircraft.registrations.join(', ')}`, aircraftId: aircraftId(aircraft), group: 'Aircraft' },
     ...aircraft.registrations.map(registration => ({ id: 'aircraft', title: registration, tag: aircraft.type, detail: `${aircraft.total} passenger seats · ${aircraft.cabinCrewSeats} cabin crew seats`, aircraftId: aircraftId(aircraft), group: 'Aircraft' }))

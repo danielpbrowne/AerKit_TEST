@@ -1,4 +1,7 @@
-private-data/
+# Local-only source and export data for restricted contacts. Keep contents out
+# of Git; only the non-sensitive folder README is tracked.
+private-data/*
+!private-data/README.md
 .env
 .env.*
 !.env.example
