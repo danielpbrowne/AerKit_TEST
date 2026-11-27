@@ -1,6 +1,6 @@
-const CACHE_NAME = 'aerkit-reference-v1-supabase-access-r1';
+const CACHE_NAME = 'aerkit-reference-v1-flight-pdf-export-r3';
 const SHELL = [
-  './', './index.html', './styles.css', './app.js', './auth.js', './supabase-config.js', './reference-data.js',
+  './', './index.html', './styles.css', './app.js', './reference-data.js',
   './manifest.webmanifest', './icon.svg', './assets/AerKit.png',
   './assets/fonts/urbanist-latin.woff2', './assets/fonts/outfit-latin.woff2'
 ];

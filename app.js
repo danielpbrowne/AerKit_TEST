@@ -155,13 +155,7 @@ function renderUsefulContacts() {
     const routes = `${contactAction('EMAIL', contact.email, 'email')}${validPhone ? contactAction('CALL', contact.phone, 'phone') : contact.phone ? `<div class="contact-action contact-action-unverified"><span>PHONE · CHECK SOURCE</span><strong>${escapeHtml(contact.phone)}</strong></div>` : ''}`;
     return `<article class="useful-person-card"><h4>${escapeHtml(contact.name)}</h4><div class="contact-actions">${routes || '<span class="contact-missing">No contact route entered</span>'}</div></article>`;
   }).join('');
-  const accessState = window.AERKIT_AUTH?.status;
-  const restrictionMessage = accessState === 'pending'
-    ? 'Your account is awaiting approval before contact details can be viewed.'
-    : accessState === 'rejected' || accessState === 'suspended'
-      ? 'This account does not currently have access to restricted contact details.'
-      : 'Sign in with an approved account to view restricted contact details.';
-  const contacts = contactCards || `<div class="contact-access-notice"><p class="contact-missing">${escapeHtml(restrictionMessage)}</p>${accessState === 'signed_out' || !accessState ? '<button class="auth-inline-button" type="button" data-auth-open>Sign in</button>' : ''}</div>`;
+  const contacts = contactCards || '<p class="contact-missing">Contact details will be available after access controls are set up.</p>';
   content.innerHTML = heading('', sections.contacts.title, '')
     + `<div class="useful-link-grid">${renderGroup('Useful Links', data.usefulLinks || [])}${renderGroup('Useful Forms', data.usefulForms || [])}</div><section class="useful-contact-panel"><h3>Telephone &amp; Email Contacts</h3><div class="useful-contact-grid">${contacts}</div></section>`;
 }
@@ -840,13 +834,7 @@ function renderDestinationProfile(destination) {
   const facts = (data.destinationFacts || []).map((fact, index) => ({ ...fact, searchIndex: index })).filter(fact => fact.code === destination.code);
   const metadata = `<div class="profile-meta"><div><span>TIME AT DUBLIN</span><strong id="dublin-current-time">Calculating…</strong></div><div><span>TIME AT ${escapeHtml(destination.name.toUpperCase())}</span><strong id="destination-current-time">Calculating…</strong></div><div><span>CURRENT WEATHER AT AIRPORT</span><strong id="destination-weather" aria-live="polite">Loading weather…</strong><small class="weather-attribution">Weather by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></small></div></div>`;
   if (!facts.length) {
-    const accessState = window.AERKIT_AUTH?.status;
-    const restrictionMessage = accessState === 'pending'
-      ? 'Your account is awaiting approval before destination details can be viewed.'
-      : accessState === 'rejected' || accessState === 'suspended'
-        ? 'This account does not currently have access to restricted destination details.'
-        : 'Sign in with an approved account to view airport, hotel and transport details.';
-    return metadata + `<div class="empty"><strong>Destination details are restricted</strong>${escapeHtml(restrictionMessage)}${accessState === 'signed_out' || !accessState ? '<button class="auth-inline-button" type="button" data-auth-open>Sign in</button>' : ''}</div>`;
+    return metadata + '<div class="empty"><strong>Destination details are not available in this preview</strong>They will be added after access controls are in place.</div>';
   }
   const grouped = new Map();
   facts.forEach(fact => {
@@ -1114,6 +1102,206 @@ function renderAircraft() {
     + `<div class="card-grid aircraft-grid">${cards}</div>`;
 }
 
+function flightPdfText(value) {
+  return String(value ?? '')
+    .replace(/[→➜]/g, ' -> ')
+    .replace(/[–—]/g, '-')
+    .replace(/[·•]/g, ' | ')
+    .replace(/°/g, ' deg ')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7e]/g, '?');
+}
+
+function buildFlightInformationPdf(sections) {
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const left = 48;
+  const right = 547;
+  const contentWidth = right - left;
+  const pages = [];
+  let commands;
+  let y;
+  const escapePdf = value => flightPdfText(value).replace(/([\\()])/g, '\\$1');
+  const text = (value, x, top, size = 10, bold = false, color = '0.13 0.22 0.28') => {
+    commands.push(`${color} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${top - size} Tm (${escapePdf(value)}) Tj ET`);
+  };
+  const rect = (x, top, width, height, color) => commands.push(`${color} rg ${x} ${top - height} ${width} ${height} re f`);
+  const startPage = () => {
+    commands = ['1 1 1 rg 0 0 595 842 re f', '0.08 0.17 0.23 rg 0 766 595 76 re f'];
+    text('Flight Information', left, 820, 22, true, '1 1 1');
+    text('Date Report Generated', right - 157, 815, 7, true, '0.89 0.78 0.43');
+    text(new Intl.DateTimeFormat('en-IE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()), right - 157, 801, 8, false, '0.88 0.91 0.90');
+    y = 748;
+    pages.push(commands);
+  };
+  const wrap = (value, maxChars = 86) => {
+    const words = flightPdfText(value).split(/\s+/);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      if (!word) continue;
+      if (word.length > maxChars) {
+        if (line) lines.push(line);
+        line = '';
+        for (let index = 0; index < word.length; index += maxChars) lines.push(word.slice(index, index + maxChars));
+      } else if (!line || `${line} ${word}`.length <= maxChars) line = line ? `${line} ${word}` : word;
+      else { lines.push(line); line = word; }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+  };
+  const ensureSpace = height => { if (y - height < 62) startPage(); };
+  const sectionHeading = title => {
+    text(title.toUpperCase(), left, y, 9, true, '0.09 0.42 0.40');
+    commands.push(`0.09 0.42 0.40 RG 0.7 w ${left} ${y - 14} m ${right} ${y - 14} l S`);
+    y -= 26;
+  };
+  const field = (label, value, x, top, width, options = {}) => {
+    const { valueSize = 11, maxChars = Math.max(16, Math.floor(width / (valueSize * 0.53))), color = '0.13 0.22 0.28', labelColor = '0.40 0.49 0.49' } = options;
+    text(label.toUpperCase(), x, top, 7, true, labelColor);
+    const lines = wrap(value, maxChars);
+    lines.forEach((line, index) => text(line, x, top - 13 - (index * 13), valueSize, index === 0, color));
+    return 26 + Math.max(0, lines.length - 1) * 13;
+  };
+
+  startPage();
+  const route = sections.find(section => section.title === 'Route')?.rows || [];
+  const routeOrigin = route.find(([label]) => label === 'Departure')?.[1] || 'Not selected';
+  const routeDestination = route.find(([label]) => label === 'Arrival')?.[1] || 'Not selected';
+  ensureSpace(114);
+  rect(left, y, contentWidth, 102, '0.08 0.17 0.23');
+  text('PLANNED ROUTE', left + 16, y - 15, 8, true, '0.89 0.78 0.43');
+  const routeMid = left + contentWidth / 2;
+  field('Departure', routeOrigin, left + 16, y - 33, contentWidth / 2 - 28, { valueSize: 14, maxChars: 24, color: '1 1 1', labelColor: '0.89 0.78 0.43' });
+  field('Arrival', routeDestination, routeMid + 18, y - 33, contentWidth / 2 - 34, { valueSize: 14, maxChars: 24, color: '1 1 1', labelColor: '0.89 0.78 0.43' });
+  const routeLineY = y - 79;
+  commands.push(`0.89 0.78 0.43 RG 1.2 w ${left + 40} ${routeLineY} m ${right - 40} ${routeLineY} l S`);
+  const endpoint = x => {
+    const radius = 3;
+    const curve = radius * 0.5523;
+    commands.push(`0.89 0.78 0.43 rg ${x} ${routeLineY - radius} m ${x + curve} ${routeLineY - radius} ${x + radius} ${routeLineY - curve} ${x + radius} ${routeLineY} c ${x + radius} ${routeLineY + curve} ${x + curve} ${routeLineY + radius} ${x} ${routeLineY + radius} c ${x - curve} ${routeLineY + radius} ${x - radius} ${routeLineY + curve} ${x - radius} ${routeLineY} c ${x - radius} ${routeLineY - curve} ${x - curve} ${routeLineY - radius} ${x} ${routeLineY - radius} c f`);
+  };
+  endpoint(left + 40);
+  endpoint(right - 40);
+  commands.push(`1 1 1 RG 1.6 w ${routeMid - 14} ${routeLineY} m ${routeMid + 15} ${routeLineY} l S`);
+  commands.push(`0.89 0.78 0.43 RG 1.4 w ${routeMid + 4} ${routeLineY} m ${routeMid - 6} ${routeLineY + 8} l ${routeMid - 3} ${routeLineY} l ${routeMid - 6} ${routeLineY - 7} l ${routeMid + 4} ${routeLineY} l S`);
+  y -= 119;
+
+  const timing = sections.find(section => section.title === 'Flight timing')?.rows || [];
+  if (timing.length) {
+    ensureSpace(132);
+    sectionHeading('Flight timing');
+    const findTiming = label => timing.find(([candidate]) => candidate === label)?.[1] || 'Not entered';
+    const triplet = [['Pushback', findTiming('Pushback')], ['Taxi', findTiming('Taxi')], ['Flight time', findTiming('Flight time')]];
+    const tripletGap = 14;
+    const tripletWidth = (contentWidth - tripletGap * 2) / 3;
+    triplet.forEach(([label, value], index) => {
+      field(label, value, left + index * (tripletWidth + tripletGap), y, tripletWidth, { maxChars: 27, valueSize: 9 });
+    });
+    y -= 45;
+    const arrivals = [['Estimated arrival in Dublin', findTiming('Estimated arrival in Dublin')], ['Estimated local arrival', findTiming('Estimated local arrival')]];
+    const arrivalGap = 20;
+    const arrivalWidth = (contentWidth - arrivalGap) / 2;
+    arrivals.forEach(([label, value], index) => {
+      field(label, value, left + index * (arrivalWidth + arrivalGap), y, arrivalWidth, { maxChars: 44, valueSize: 10 });
+    });
+    y -= 42;
+  }
+
+  const passengerSection = sections.find(section => section.title === 'Passenger numbers');
+  if (passengerSection?.rows.length) {
+    ensureSpace(130);
+    sectionHeading('Passenger numbers');
+    const gap = 12;
+    const colWidth = (contentWidth - gap * 2) / 3;
+    passengerSection.rows.forEach(([label, value], index) => {
+      const col = index % 3;
+      const row = Math.floor(index / 3);
+      const x = left + col * (colWidth + gap);
+      const top = y - row * 38;
+      const isTotal = label === 'Total passengers including infants';
+      if (isTotal) {
+        rect(x - 6, top + 5, colWidth + 2, 34, '0.91 0.95 0.93');
+        commands.push(`0.08 0.17 0.23 RG 1 w ${x - 6} ${top - 29} ${colWidth + 2} 34 re S`);
+      }
+      field(label, value, x, top, colWidth, { maxChars: 24, valueSize: isTotal ? 14 : 11, color: isTotal ? '0.08 0.32 0.31' : '0.13 0.22 0.28' });
+    });
+    y -= Math.ceil(passengerSection.rows.length / 3) * 41 + 12;
+  }
+
+  const weatherSection = sections.find(section => section.title === 'Weather forecast');
+  if (weatherSection?.rows.length) {
+    ensureSpace(108);
+    sectionHeading('Weather forecast');
+    const gap = 12;
+    const colWidth = (contentWidth - gap) / 2;
+    const weatherCards = weatherSection.rows.map(([label, value], index) => {
+      const x = left + index * (colWidth + gap);
+      const lines = wrap(value, 48);
+      const cardHeight = 38 + lines.length * 12;
+      return { x, label, lines, cardHeight };
+    });
+    const cardHeight = Math.max(...weatherCards.map(card => card.cardHeight));
+    ensureSpace(cardHeight + 12);
+    weatherCards.forEach(card => {
+      rect(card.x, y, colWidth, cardHeight, '0.95 0.97 0.96');
+      text(card.label.toUpperCase(), card.x + 10, y - 12, 8, true, '0.09 0.42 0.40');
+      card.lines.forEach((line, index) => text(line, card.x + 10, y - 29 - index * 12, 8, index === 0));
+    });
+    y -= cardHeight + 17;
+  }
+
+  const notesSection = sections.find(section => section.title === 'Flight notes');
+  const notesValue = notesSection?.rows.find(([label]) => label === 'Notes')?.[1];
+  if (notesValue) {
+    sectionHeading('Flight notes');
+    const lines = wrap(notesValue, 94);
+    let lineIndex = 0;
+    while (lineIndex < lines.length) {
+      const availableLines = Math.max(1, Math.floor((y - 70) / 14));
+      const pageLines = lines.slice(lineIndex, lineIndex + availableLines);
+      const cardHeight = 24 + pageLines.length * 14;
+      ensureSpace(cardHeight + 8);
+      rect(left, y, contentWidth, cardHeight, '0.96 0.97 0.95');
+      pageLines.forEach((line, index) => text(line, left + 12, y - 15 - index * 14, 10, false));
+      y -= cardHeight + 10;
+      lineIndex += pageLines.length;
+      if (lineIndex < lines.length) {
+        startPage();
+        sectionHeading('Flight notes (continued)');
+      }
+    }
+  }
+
+  pages.forEach((page, index) => {
+    page.push(`0.69 0.75 0.74 RG 0.6 w ${left} 47 m ${right} 47 l S`);
+    page.push(`0.36 0.43 0.44 rg BT /F1 8 Tf 1 0 0 1 ${left} 31 Tm (Generated from AerKit flight planning details) Tj ET`);
+    page.push(`0.36 0.43 0.44 rg BT /F1 8 Tf 1 0 0 1 ${right - 55} 31 Tm (Page ${index + 1} of ${pages.length}) Tj ET`);
+  });
+
+  const objects = [];
+  const addObject = value => { objects.push(value); return objects.length; };
+  const fontRegular = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  const fontBold = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const pageIds = [];
+  pages.forEach(page => {
+    const stream = `${page.join('\n')}\n`;
+    const streamId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
+    pageIds.push(addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontRegular} 0 R /F2 ${fontBold} 0 R >> >> /Contents ${streamId} 0 R >>`));
+  });
+  const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
+  pageIds.forEach(id => { objects[id - 1] = objects[id - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`); });
+  const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => { offsets.push(pdf.length); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach(offset => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([pdf], { type: 'application/pdf' });
+}
+
 function renderFlightInformation() {
   const routeAirports = [{ name: 'Dublin', code: 'DUB' }, ...data.destinations.filter(airport => airport.code !== 'DUB')].sort((a, b) => a.name.localeCompare(b.name));
   const renderAirportOption = airport => `<option value="${escapeHtml(airport.code)}">${escapeHtml(airport.name)} (${escapeHtml(airport.code)})</option>`;
@@ -1169,7 +1357,7 @@ function renderFlightInformation() {
           <p id="flight-weather-status" class="flight-weather-status" role="status" aria-live="polite">Forecasts are supplied by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.</p>
         </section>
       </div>
-      <div class="flight-form-footer"><div class="flight-footer-actions"><button class="clear-flight-button" type="button" id="show-flight-snapshot">Flight Snapshot</button><button class="clear-flight-button" type="button" id="clear-flight-information">Clear Flight Information</button></div></div>
+      <div class="flight-form-footer"><div class="flight-footer-actions"><button class="clear-flight-button" type="button" id="show-flight-snapshot">Flight Snapshot</button><button class="clear-flight-button" type="button" id="export-flight-information">Export Flight Information</button><button class="clear-flight-button" type="button" id="clear-flight-information">Clear Flight Information</button></div></div>
     </form>
     <dialog class="flight-snapshot-dialog" id="flight-snapshot-dialog" aria-labelledby="flight-snapshot-title">
       <article class="flight-snapshot-card">
@@ -1306,6 +1494,56 @@ function renderFlightInformation() {
     updateArrivalOptions();
     updateFlightSummary();
     updateFlightWeather();
+  });
+  content.querySelector('#export-flight-information').addEventListener('click', () => {
+    const values = Object.fromEntries(new FormData(form).entries());
+    const origin = getFlightAirport(values.originAirport);
+    const destination = getFlightAirport(values.destination);
+    const originZone = destinationTimeZones[values.originAirport];
+    const pushback = values.pushback && originZone
+      ? formatFlightTime(wallTimeToDate(values.pushback, originZone), originZone)
+      : 'Not entered';
+    const counts = name => values[name] || '0';
+    const prmTotal = ['prmWhcr', 'prmWchs', 'prmWchsOther'].reduce((sum, name) => sum + Math.max(0, Number(values[name]) || 0), 0);
+    const paxTotal = ['business', 'premiumEconomy', 'economy', 'infants'].reduce((sum, name) => sum + Math.max(0, Number(values[name]) || 0), 0);
+    const weather = role => {
+      const output = content.querySelector(`#flight-weather-${role}`);
+      const forecastTime = output.querySelector('.weather-forecast-time')?.textContent.trim() || '';
+      const details = Object.fromEntries([...output.querySelectorAll('dt')].map(term => [term.textContent.trim(), term.nextElementSibling?.textContent.trim() || '']));
+      const brief = [
+        details.Temperature ? `Temperature ${details.Temperature}` : '',
+        details.Wind ? `Wind ${details.Wind}` : ''
+      ].filter(Boolean).join(' | ');
+      const status = output.textContent.trim();
+      return [forecastTime, brief].filter(Boolean).join(' | ') || status || 'Forecast not available';
+    };
+    const sections = [
+      { title: 'Route', rows: [['Departure', origin ? `${origin.name} (${origin.code})` : 'Not selected'], ['Arrival', destination ? `${destination.name} (${destination.code})` : 'Not selected']] },
+      { title: 'Flight timing', rows: [
+        ['Pushback', pushback], ['Taxi', values.taxiMinutes ? `${values.taxiMinutes} minutes` : 'Not entered'],
+        ['Flight time', `${values.flightHours || '0'} hours ${values.flightMinutes || '0'} minutes`],
+        ['Estimated arrival in Dublin', content.querySelector('#estimated-arrival-dublin').textContent],
+        ['Estimated local arrival', content.querySelector('#estimated-arrival-destination').textContent]
+      ] },
+      { title: 'Passenger numbers', rows: [
+        ['Business class', counts('business')], ['Premium Economy', counts('premiumEconomy')], ['Economy', counts('economy')],
+        ['Infants', counts('infants')], ['WHCR', counts('prmWhcr')], ['WCHS', counts('prmWchs')], ['WCHC', counts('prmWchsOther')],
+        ['PRM total', String(prmTotal)], ['Total passengers including infants', String(paxTotal)]
+      ] },
+      { title: 'Weather forecast', rows: [
+        [`Departure${origin ? ` - ${origin.name}` : ''}`, weather('origin')],
+        [`Arrival${destination ? ` - ${destination.name}` : ''}`, weather('destination')]
+      ] },
+      { title: 'Flight notes', rows: [['Notes', values.flightInformation?.trim() || 'None']] }
+    ];
+    const blob = buildFlightInformationPdf(sections);
+    const link = document.createElement('a');
+    const route = [origin?.code, destination?.code].filter(Boolean).join('-') || 'flight-plan';
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = URL.createObjectURL(blob);
+    link.download = `AerKit-Flight-Information-${route}-${date}.pdf`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   });
   content.querySelector('#show-flight-snapshot').addEventListener('click', () => {
     const values = Object.fromEntries(new FormData(form).entries());
@@ -1659,23 +1897,6 @@ const searchable = [
   ...(data.usefulForms || []).map(form => ({ id: 'contacts', title: form.title, tag: 'USEFUL FORM', detail: 'Online form', group: 'Useful forms' })),
   ...(data.usefulContacts || []).map(contact => ({ id: 'contacts', title: contact.name, tag: 'CONTACT', detail: [contact.phone, contact.email].filter(Boolean).join(' · '), group: 'Contacts' }))
 ];
-
-window.addEventListener('aerkit-access-updated', () => {
-  for (let index = searchable.length - 1; index >= 0; index -= 1) {
-    if (searchable[index].restricted) searchable.splice(index, 1);
-  }
-  if (window.AERKIT_AUTH?.approved) {
-    searchable.push(...(data.destinationFacts || []).map((fact, index) => ({
-      id: 'destinations', title: fact.field, tag: `${fact.destination} · ${fact.code}`, detail: fact.value,
-      destinationCode: fact.code, group: `${fact.destination} · ${fact.category}`, targetId: `destination-fact-${index}`, restricted: true
-    })));
-    searchable.push(...(data.usefulContacts || []).map(contact => ({
-      id: 'contacts', title: contact.name, tag: 'CONTACT', detail: [contact.phone, contact.email].filter(Boolean).join(' · '), group: 'Contacts', restricted: true
-    })));
-  }
-  renderRoute();
-  if (search.value.trim()) showResults(search.value);
-});
 
 function showResults(query) {
   const term = query.trim().toLowerCase();
